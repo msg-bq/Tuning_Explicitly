@@ -1,0 +1,12 @@
+CoT: >-
+  Answer: Let's think step by step. First rationale then answer.
+  If you use any prior knowledge or rule during the inference, write them briefly in "<Begin>xxx</End>" format. 
+  Only do this if you find them. Note that these rules should be true in general.
+
+pred_trigger: The answer is
+
+train_prompt: >-
+  Instruction: Following are several existed knowledge in knowledge base. When you answer the questions, 
+  try to use the provided knowledge whenever possible in "we retrieve" format.
+  Try not to invent knowledge by yourself unless necessary. But if so, you are permitted to
+  establish your own rules in "we have" format.\n

@@ -1,0 +1,49 @@
+CoT:
+  lang8: |-
+    Sentence: December
+    Question: What's the grammar errors and revised sentence of above sentence?
+    Answer: Let's check each phrase in the sentence in turn and the grammar errors in whole sentence that may occur.
+    For the first phrase "December", it is a proper noun representing a month, no grammar errors.
+    For the whole sentence "December", no grammar errors.
+    Therefore, the revised sentence is "December".
+
+    Sentence: We excited the show !
+    Question: What's the grammar errors and revised sentence of above sentence?
+    Answer: Let's check each phrase in the sentence in turn and the grammar errors in whole sentence that may occur.
+    For the first phrase "We", it is a proper noun representing a person, no grammar errors.
+    For the second phrase "excited at", it is a verb tense, no grammar errors.
+    For the third phrase "the show", it is a proper noun representing a place, no grammar errors.
+    For the whole sentence "We were excited at the show !", we have "Subject-Verb agreement rule", there's an error so that change "excited -> were excited at".
+    Therefore, the revised sentence is "We were excited at the show !"
+
+    Sentence: I asked her if she have boyfriend or not .
+    Question: What's the grammar errors and revised sentence of above sentence?
+    Answer: Let's check each phrase in the sentence in turn and the grammar errors in whole sentence that may occur.
+    For the first phrase "I", it is a proper noun representing a person, no grammar errors.
+    For the second phrase "asked her", it is a verb tense, no grammar errors.
+    For the third phrase "she", it is a proper noun representing a person, no grammar errors.
+    For the fourth phrase "have", it is a verb tense and in a past tense, we have "Use the correct verb tense to match the timing of the action being described.", there's an error so that change "have -> had".
+    For the fifth phrase "boyfriend", it is a proper noun representing a person, we have "Use "a" before specific instances of a noun, such as "a diary.", there's an error so that change "boyfriend -> a boyfriend".
+    For the sixth phrase "or not", it is a proper noun representing a person, no grammar errors.
+    For the whole sentence "I asked her if she have boyfriend or not .", we have "Including "or not" after "if" may occur in casual speech but is typically avoided in formal writing and speech.", there's an error so that change "or not -> ".
+    Therefore, the revised sentence is "I asked her if she had a boyfriend ."
+
+    Sentence: Crossing my fingers for them ^ _ ^ ! ! ! lol
+    Question: What's the grammar errors and revised sentence of above sentence?
+    Answer: Let's check each phrase in the sentence in turn and the grammar errors in whole sentence that may occur.
+    For the first phrase "Crossing", it is a verb tense, no grammar errors.
+    For the second phrase "my", it is a possessive, no grammar errors.
+    For the third phrase "fingers", it is a proper noun, no grammar errors.
+    For the fourth phrase "for", it is a verb tense, no grammar errors.
+    For the fifth phrase "them", it is a possessive, no grammar errors.
+    For the sixth phrase "lol", it is a proper noun, no grammar errors.
+    For the whole sentence "Crossing my fingers for them ^ _ ^ ! ! ! lol", no grammar errors.
+    Therefore, the revised sentence is "Crossing my fingers for them ^ _ ^ ! ! ! lol"
+
+    Sentence: T `` .
+    Question: What's the grammar errors and revised sentence of above sentence?
+    Answer: Let's check each phrase in the sentence in turn and the grammar errors in whole sentence that may occur.
+    For the first phrase "T", it is just a character, no grammar errors.
+    For the second phrase "``", it is just a punctuation, no grammar errors.
+    For the whole sentence "T `` .", no grammar errors.
+    Therefore, the revised sentence is "T `` ."
