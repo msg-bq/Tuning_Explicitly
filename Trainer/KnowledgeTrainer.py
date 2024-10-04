@@ -28,8 +28,8 @@ class Trainer:
 
         for data in dataset:
             knowledge_texts = []
-            for r in data.rationale:
-                knowledge_texts += r.extract_knowledge()  # 这儿也没有根据prediction和label的一致性选择正确的rule
+            for r in data.rationales:
+                knowledge_texts += r.get_knowledge_texts()  # 这儿也没有根据prediction和label的一致性选择正确的rule
                 self.knowledge_base.update_knowledge(knowledge_texts=knowledge_texts,
                                                      question=data.question,
                                                      rationale=r,
@@ -81,7 +81,7 @@ class Trainer:
                  rationale: Rationale,
                  score: float):
         if rationale:
-            knowledge_texts = rationale.extract_knowledge_texts()
+            knowledge_texts = rationale.get_knowledge_texts(rationale.rationale)
 
             if score > 0.5:
                 print("occurred_rules:", knowledge_texts)
@@ -137,3 +137,67 @@ class Trainer:
 
         self.knowledge_base.save_knowledge_memory(knowledge_memory_path=f"{self.args.save_dir}/rule_map_final",
                                                   vectorizer_path=f"{self.args.save_dir}/vectorizer_final.pkl")
+
+
+    def eval(self):
+        """
+        将模型置于evaluate模式，包括：# 其实某种意义上，可以说读入rule_base应该专门有一个load函数，而不是放在这里。train.rationale可能也应该在load里读入
+        1. 将llm置于evaluate模式
+        2. 读入rule_base
+        3. 读入train_dataset的rationale，并生成demos。由于此刻train里面还没保存，所以就先读入demos_epoch{epoch-1}作为替代
+        """
+        # 1. 将llm置于evaluate模式
+        # self.llm.eval() 这行代码暂时还无法生效
+
+        # 2. 读入rule_base
+        if len(self.rule_base) == 0:  # 这个我觉得是，只有纯测试的时候才需要读入。平时的话规则库本来就在训练过程中有了
+            # 如果还想考虑一个特殊情况的话，就是checkpoint。但是这个我觉得也没必要，因为checkpoint的load阶段就应该读入了
+            rule_base_final_path = f"{self.args.save_dir}/rule_base_final"
+            self.rule_base.read_rules(rule_base_final_path)
+
+        # 3. 读入train_dataset的rationale
+        # 目前还没保存训练集，所以直接读取demos和added_rules
+        with open(f"{self.args.save_dir}/demos_epoch{0}", encoding="utf8") as f:
+            self.eval_demos = "".join([l for l in f.readlines()])
+
+        save_path = f"{self.args.save_dir}/demos_eval"
+        with open(save_path, 'w', encoding="utf8") as f:
+            f.write(str(self.eval_demos))
+
+        with open(f"{self.args.save_dir}/added_rule_epoch{0}", encoding="utf8") as f:
+            self.eval_added_rules = "".join([l for l in f.readlines()])
+
+    def eval_step(self, example: Example):
+        # 预留一个后处理demos的函数，是hjq写的
+
+        _, response = llm_n_shot_CoT(self.llm, self.eval_added_rules,
+                                     input_text=example.question, demos=self.eval_demos, model=self.args.llm_model)
+        rationale = example.parse_response(response, self.args)
+        prediction = Rationale.clean_prediction(rationale['prediction'])
+        print(rationale['prediction'])
+        print(prediction, example.gold_label)
+        return prediction, example.gold_label
+
+    def evaluate(self, is_valid=False, special_datasets: DatasetLoader = None):
+        """
+        验证集和测试集的评估
+        """
+        eval_type = "valid" if is_valid else "test"
+        datasets = special_datasets if special_datasets else self.valid_dataset if is_valid else self.test_dataset
+
+        # if is_valid: # valid用于训练阶段的测试
+        #     demos = demo_cluster(self.args, self.train_dataset) #目前这个手段，还不能做到逐阶段优化5-shot
+        #     # 因为demo_cluster里用的rationale，只是random.choice了一个rationale，而不是根据score来选
+        #     demos, added_rules = n_shot_prompt(self.args, rules=self.rule_base.sample_rules(), demos=demos)
+        # else:
+        #     pass
+
+        correct_cnt = 0
+        with ThreadPoolExecutor(max_workers=10) as executor:
+            futures = [executor.submit(self.eval_step, example) for example in datasets]
+            for future in futures:
+                prediction, gold_label = future.result()
+                if prediction == gold_label:
+                    correct_cnt += 1
+
+        logger.info(f"{eval_type}集上的准确率为：{correct_cnt / len(datasets)}")

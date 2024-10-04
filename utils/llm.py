@@ -1,10 +1,9 @@
-import concurrent.futures
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
 from typing import Optional, List
-import sys
 
 from utils.llm_models import *
+
 
 def generate_func_mapping(model: str) -> callable:
     openai_prefix = ["davinci", "gpt"]
@@ -29,13 +28,13 @@ class LLM:
         self.generate_func = generate_func
         self.max_workers = max_workers
 
-    def generate_single(self, input_text: str, *args, **kwargs) -> str:
+    def generate_single(self, input_text: str, **kwargs) -> str:
         if self.generate_func is None:
             raise ValueError("generate_func is None.")
 
         return self.generate_func(input_text, **kwargs)
 
-    def generate_single_parallel(self, input_text: str, try_times: int = 3 , **kwargs) -> List[str]:
+    def generate_single_parallel(self, input_text: str, try_times: int = 3, **kwargs) -> List[str]:
         results = []
 
         workers = min(try_times, self.max_workers)

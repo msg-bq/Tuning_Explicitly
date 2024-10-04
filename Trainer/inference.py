@@ -6,9 +6,10 @@ from typing import List, Tuple
 import json
 
 from utils.data import DatasetLoader, Example, Rationale, KnowledgeBase
-import utils.extract_knowledge
 from utils.llm import LLM
 from utils.ExtraNameSpace import ScoreNameSpace
+from utils.extract_knowledge import extract_knowledge_texts
+import utils.extract_knowledge
 import utils.clean_prediction_func
 import utils.score
 
@@ -52,22 +53,22 @@ def cold_start_inference(args, llm: LLM, dataset: DatasetLoader):
         with open(cold_start_path, 'w'):
             pass
 
-    def save_to_cold_start(example: Example):
-        if example.rationales:
-            final_dict = example.to_dict()
-            if example.rationales:
-                with open(cold_start_path, 'w') as f:
+    def save_to_cold_start(example_tmp: Example):
+        if example_tmp.rationales:
+            final_dict = example_tmp.to_dict()
+            if example_tmp.rationales:
+                with open(cold_start_path, 'w') as fs:
                     assert len(final_dict['rationale']) == len(final_dict['prediction'])
-                    for r, p in zip(final_dict['rationale'], final_dict['prediction']):
+                    for ration, pred in zip(final_dict['rationale'], final_dict['prediction']):
                         tmp_dict = {'question': final_dict['question'].strip(),
                                     'gold_label': final_dict['gold_label'].strip(),
-                                    'rationale': r.strip(), 'prediction': p.strip()}
-                        f.write(json.dumps(tmp_dict) + '\n')
+                                    'rationale': ration.strip(), 'prediction': pred.strip()}
+                        fs.write(json.dumps(tmp_dict) + '\n')
 
             return True
 
-        with open(fail_file, 'a') as f:
-            f.write(json.dumps({'question': example.question.strip()}) + '\n')
+        with open(fail_file, 'a') as fs:
+            fs.write(json.dumps({'question': example_tmp.question.strip()}) + '\n')
 
         return False
 
@@ -92,7 +93,7 @@ def _cold_start_inference_single(args, llm: LLM, example: Example):
                                                 direct_answer_trigger_for_zeroshot_cot=args.direct_answer_trigger_for_zeroshot_cot,
                                                 llm_model=args.llm_model,
                                                 temperature=args.cold_start_temperature,
-                                                topN=args.cold_start_topN,
+                                                top_n=args.cold_start_topN,
                                                 try_times=args.cold_start_try_num,
                                                 cold_start_phase=True)
 
@@ -107,7 +108,7 @@ def _cold_start_inference_single(args, llm: LLM, example: Example):
 
 
 def _inference_single(llm: LLM, input_text: str, cot_trigger: str, direct_answer_trigger_for_zeroshot_cot: str,
-                      llm_model: str, temperature: float, topN: int, try_times: int, cold_start_phase: bool = True) \
+                      llm_model: str, temperature: float, top_n: int, try_times: int, cold_start_phase: bool = True) \
                      -> List[Tuple[str, str]]:
     """
     cold_start_phase和其他的区别是，要多一层direct_answer_trigger_for_zeroshot_cot
@@ -117,7 +118,7 @@ def _inference_single(llm: LLM, input_text: str, cot_trigger: str, direct_answer
     rationales_answers_pair = []
     rationales = llm.generate_single_parallel(input_text=llm_input, model=llm_model,
                                               temperature=temperature,
-                                              topN=topN,
+                                              topN=top_n,
                                               try_times=try_times)
 
     if cold_start_phase:
@@ -152,7 +153,7 @@ def llm_inference_category(args,
     while True:
         response = llm.generate_single(input_text=prompt, **kwargs)
         whole_text = prompt + " " + response
-        pending_lines = whole_text.split('\n')[input_length-1:] # 所有除去prompt的句子。每轮current_line不清零，所以不影响位置
+        pending_lines = whole_text.split('\n')[input_length-1:]  # 所有除去prompt的句子。每轮current_line不清零，所以不影响位置
 
         concepts = None
         sign = False
@@ -192,14 +193,16 @@ def llm_inference_category(args,
             return out
 
         if sign:
-            this_rule = random.choice(knowledge_memory[concepts]) # 随机，似乎不适合greedy
-            line = pending_lines[current_line+1] # 因为回退了一行
+            this_rule = random.choice(knowledge_memory[concepts])  # 随机，似乎不适合greedy
+            line = pending_lines[current_line+1]  # 因为回退了一行
             current_rule = extract_knowledge_texts(line)
             assert len(current_rule) == 1, "It's better to have only one rule in line: " + line
 
-            line = line.replace(current_rule[0], this_rule['rule_text'])
+            current_rule = current_rule[0]
+            line = line[:line.index(current_rule)+len(current_rule)]
+            line = line.replace(current_rule, this_rule['rule_text'])
 
-            prompt = "\n".join(whole_text.split("\n")[:current_line+input_length-1]) + '\n' + line # 这个-1不一定对
+            prompt = "\n".join(whole_text.split("\n")[:current_line+input_length-1]) + '\n' + line  # 这个-1不一定对
             current_line += 1
 
             print('有替换！')

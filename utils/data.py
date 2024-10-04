@@ -5,7 +5,6 @@ from collections import defaultdict
 from random import choices
 from typing import List, Dict, Optional, Union, Tuple, overload, Set, Any
 
-
 from utils.ExtraNameSpace import PredictionCleanNameSpace, KnowledgeExtractionNameSpace
 import utils.extract_knowledge
 
@@ -13,15 +12,17 @@ from sklearn.feature_extraction.text import TfidfVectorizer
 
 knowledge_info = Union[Dict[str, str], 'KnowledgeSource']
 
+
 class KnowledgeSource:
     def __init__(self, knowledge: str, question: str, rationale: 'Rationale', score: float):
         self.question = question
         self.rationale = rationale
         self.score = score
 
+        assert isinstance(knowledge, str), "knowledge should be str, not %s" % type(knowledge)
         self.related_context = self._get_related_context(knowledge)
 
-    def _get_related_context(self, knowledge) -> str:
+    def _get_related_context(self, knowledge: str) -> str:
         """
         :return: 从question和rationale的组合中，获取和当前knowledge强相关的context，用于memorization
         默认策略为rationale中knowledge对应那行前面的字符
@@ -57,8 +58,8 @@ class Knowledge:
         if related_info:
             self.load_source(related_info)
 
-        #unused这个变量，我们依赖于correct+wrong的数量这个参数可以替代，所以不需要保留，这样也就失去了prompt+knowledge的最后一层必要了
-        #当然prompt里面+KB仍然还是不反对的，只是我们现在无所谓了
+        # unused这个变量，我们依赖于correct+wrong的数量这个参数可以替代，所以不需要保留，这样也就失去了prompt+knowledge的最后一层必要了
+        # 当然prompt里面+KB仍然还是不反对的，只是我们现在无所谓了
 
     def load_source(self, related_info: knowledge_info):
         if isinstance(related_info, dict):
@@ -87,13 +88,20 @@ class Knowledge:
                                         score=score))
 
     def get_confidence(self) -> float:
-        pass
+        return self.get_success_num() / (len(self.source)+10)
+
+    @staticmethod
+    def _is_success(source: KnowledgeSource):
+        """
+        先采取默认策略，＞0.8的认为回答正确
+        """
+        return source.score > 0.8
 
     def get_success_num(self) -> int:
-        pass
+        return len([s for s in self.source if self._is_success(s)])
 
     def get_failure_num(self) -> int:
-        pass
+        return len(self.source) - self.get_success_num()
 
     def dumps(self):
         return {'content': self.content,
@@ -107,6 +115,7 @@ class Knowledge:
         return Knowledge(content=knowledge['content'],
                          related_info=[KnowledgeSource.loads(s)
                                        for s in knowledge['source_questions']])
+
 
 class KnowledgeBase:
     def __init__(self):
@@ -131,40 +140,50 @@ class KnowledgeBase:
 
         raise TypeError("knowledge in '_split_knowledge_text' func should be str")
 
-    def _find_knowledge_instance(self, knowledge: Union[str, List[Union[str, Knowledge]]], knowledge_source: 'KnowledgeSource') \
+    def _find_knowledge_instance(self, knowledge: Union[str, List[Union[str, Knowledge]]],
+                                 knowledge_source: List['KnowledgeSource']) \
             -> Set[Knowledge]:
         knowledge = self._split_knowledge_text(knowledge) if isinstance(knowledge, str) else knowledge
-        knowledge = [k.content if isinstance(k, Knowledge) else k for k in knowledge] # 不假设"Knowledge类型=在KB里"
+        knowledge = [k.content if isinstance(k, Knowledge) else k for k in knowledge]  # 不假设"Knowledge类型=在KB里"
 
         knowledge_instances = set([self._content_to_instance[k] if k in self._content_to_instance
                                    else self._add_knowledge(k, knowledge_source) for k in knowledge])
 
         return knowledge_instances
-    #
+
     def update_knowledge(self, knowledge_texts: Union[str, List[str], List[Knowledge]],
                          question: str, rationale: 'Rationale', score: float) -> List[Knowledge]:
         """
         需要字符串匹配，找到就返回，找不到就创建+返回
         :param knowledge_texts: 答题时从rationale中抽取的规则
+        :param rationale:
+        :param score:
         :param question: 问题
         本函数现在还不支持batch，连带着后面的find_instance之类的都不支持
         """
-        knowledge_source = KnowledgeSource(knowledge=knowledge_texts,
-                                           question=question,
-                                           rationale=rationale,
-                                           score=score)
+        if not isinstance(knowledge_texts, list):
+            knowledge_texts = [knowledge_texts]
 
-        knowledges = self._find_knowledge_instance(knowledge_texts, knowledge_source)
+        knowledge_sources = []
+        for k in knowledge_texts:
+            knowledge_source = KnowledgeSource(knowledge=k,
+                                               question=question,
+                                               rationale=rationale,
+                                               score=score)
+
+            knowledge_sources.append(knowledge_source)
+
+        knowledges = self._find_knowledge_instance(knowledge_texts, knowledge_sources)
 
         return list(knowledges)
 
-    def __add_knowledge(self, knowledge: str, knowledge_source: 'KnowledgeSource', score: float) -> Knowledge:
+    def __add_knowledge(self, knowledge: str, knowledge_source: List['KnowledgeSource']) -> Knowledge:
         knowledge_instance = Knowledge(content=knowledge, related_info=knowledge_source)
         self._content_to_instance[knowledge] = knowledge_instance
 
         return knowledge_instance
 
-    def _add_knowledge(self, knowledge: Union[List[str], str], knowledge_source: 'KnowledgeSource',
+    def _add_knowledge(self, knowledge: Union[List[str], str], knowledge_sources: List['KnowledgeSource'],
                        scores: Union[List[float], float] = None) -> Union[Knowledge, List[Knowledge]]:
         """
         这里需要一个添加knowledge的函数，包括将字符串转为str+查重+添加
@@ -173,15 +192,16 @@ class KnowledgeBase:
         if not scores:
             scores = 1.0 if isinstance(knowledge, str) else [1.0] * len(knowledge)
 
-        assert len(knowledge) == len(scores), "The length of knowledge and scores should be the same"
+        if isinstance(knowledge, list):
+            assert len(knowledge) == len(scores), "The length of knowledge and scores should be the same"
 
         if isinstance(knowledge, str):
-            return self.__add_knowledge(knowledge, knowledge_source, scores)
+            return self.__add_knowledge(knowledge, knowledge_sources)
         elif isinstance(knowledge, list):
-            new_knowledge_instances = [self.__add_knowledge(knowledge, knowledge_source, score) for
+            new_knowledge_instances = [self.__add_knowledge(knowledge, knowledge_sources) for
                                        knowledge, score in zip(knowledge, scores)]
             return new_knowledge_instances
-#
+
     def broadcast_knowledge_info(self):
         """可能存在的同步需求"""
         pass
@@ -214,7 +234,7 @@ class KnowledgeBase:
                 self.vectorizer = pickle.load(file)
 
             self.build_conceptual_memory()
-#
+
     def _update_knowledge_memory(self, concepts_chain: List[Any], knowledge_chain: Union[Knowledge, List[Knowledge]]):
         """
         这个函数暂时封装的意义不大，只是看之后有无其他函数也需要调用
@@ -268,13 +288,13 @@ class KnowledgeBase:
         这里算法可选，能达成为句子提供分类名词的需求即可，我们目前采取的策略是tf idf获取keywords作为概念
         """
 
-        def calculate_tf_idf(doc_list: List[str]):
+        def calculate_tf_idf(doc_lst: List[str]):
             vectorizer = TfidfVectorizer(stop_words='english')
-            vectorizer.fit_transform(doc_list)
+            vectorizer.fit_transform(doc_lst)
 
             return vectorizer
 
-        self.vectorizer = calculate_tf_idf(doc_list=doc_list)
+        self.vectorizer = calculate_tf_idf(doc_lst=doc_list)
 
     def _get_memory_learned_info(self) -> List[Knowledge]:
         """
@@ -320,24 +340,23 @@ class Rationale:  # 修正到只有两个属性
     def __init__(self, rationale: str, prediction: str):
         self.rationale = rationale.strip()
         self.prediction = self.clean_prediction(prediction)
-        self.knowledge_texts = list(self.extract_knowledge_texts(self.rationale)) # 这里就不转换knowledge_text为knowledge instance了，感觉没必要
+        self.knowledge_texts = list(self.get_knowledge_texts())  # 这里就不转换knowledge_text为knowledge instance了，感觉没必要
         # 就靠knowledge source存储即可，分析
 
     @classmethod
     @KnowledgeExtractionNameSpace.register("Example")
-    def _extract_knowledge_texts(cls, rationale) -> List[str]:
+    def extract_knowledge_texts(cls, rationale) -> List[str]:
         pass
 
-    @classmethod
-    def extract_knowledge_texts(cls, rationale: str) -> Union[Set[str], List[str]]:
-        if hasattr(cls, 'knowledge_texts') and cls.knowledge_texts:
-            return cls.knowledge_texts
+    def get_knowledge_texts(self) -> Union[Set[str], List[str]]:
+        if hasattr(self, 'knowledge_texts') and self.knowledge_texts:
+            return self.knowledge_texts
 
-        knowledge_texts = cls._extract_knowledge_texts(rationale)
+        knowledge_texts = self.extract_knowledge_texts(self.rationale)
 
-        cls.knowledge_texts = set(knowledge_texts)
+        self.knowledge_texts = set(knowledge_texts)
 
-        return cls.knowledge_texts
+        return self.knowledge_texts
 
     @classmethod
     @PredictionCleanNameSpace.register("Example")
@@ -377,6 +396,7 @@ class Example:
     """
     给dataloader作为样例的，所以不包含score这个字段
     """
+
     def __init__(self, question: str, gold_label: str, rationales: List[Rationale] = None, *args, **kwargs):
         self.question = question.strip()
         self.gold_label = gold_label.strip()
@@ -423,18 +443,18 @@ class Example:
             else:
                 raise TypeError("Incorrect type.")
 
-    def _check_QA(self, other_QA: Tuple[str, str]):
-        if self.question and self.question.strip() != other_QA[0].strip():
+    def _check_QA(self, other_qa: Tuple[str, str]):
+        if self.question and self.question.strip() != other_qa[0].strip():
             raise Warning("The question is not the same.")
 
-        if self.gold_label and self.gold_label.strip() != other_QA[1].strip():
+        if self.gold_label and self.gold_label.strip() != other_qa[1].strip():
             raise Warning("The gold_label is not the same.")
 
         return True
 
     @staticmethod
-    def _adjust_merge_example_to_rationale(merge_example: Dict[str, Union[str, Rationale]]) -> Dict[
-        str, Union[str, Rationale, List[Rationale]]]:
+    def _adjust_merge_example_to_rationale(merge_example: Dict[str, Union[str, Rationale]]) \
+            -> Dict[str, Union[str, Rationale, List[Rationale]]]:
         """
         将merge_example中的rationale部分(包括rationale和prediction两个key)转换为Rationale类
         """
@@ -457,7 +477,7 @@ class Example:
         else:
             merge_example = example
 
-        if isinstance(example, str):  #parse出来一个dict
+        if isinstance(example, str):  # parse出来一个dict
             self.parse_response(example, args)
         elif isinstance(example, Example):
             merge_example = example.to_dict()
@@ -485,8 +505,9 @@ class Example:
         """
         这里只会传入A：后面生成的部分
         """
-        question_name = self.question.split('\n')[-1].strip()[10:].strip()[:-6].lower() # this special case only serve for
-        # CLUTRR, and it doesn't work for the other benchmark, so it is not a big deal and you can adjust it for others.
+        question_name = self.question.split('\n')[-1].strip()[10:].strip()[
+                        :-6].lower()  # this special case only serve for
+        # CLUTRR, and it doesn't work for the other benchmark, so it is not a big deal, and you can adjust it for others.
         pred_trigger = args.pred_trigger.lower() if args else "the answer is"
 
         if pred_trigger in response.lower():
