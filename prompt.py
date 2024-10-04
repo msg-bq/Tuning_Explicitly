@@ -1,5 +1,4 @@
 import os
-from pprint import pprint
 
 import yaml
 
@@ -14,5 +13,3 @@ for filename in os.listdir(prompt_dir):
 
     if dct:
         prompt_dict.update({dateset_name: dct})
-
-pprint(prompt_dict)

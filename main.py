@@ -1,7 +1,7 @@
 import os.path
 
 from Trainer.KnowledgeTrainer import Trainer
-from utils.data import DisjointSetRuleBase
+from utils.data import KnowledgeBase
 from utils.llm import LLM, generate_func_mapping
 from utils.read_datasets import read_datasets, read_rationales
 import argparse
@@ -15,7 +15,7 @@ from logger import logger
 def args_parse():
     parser = argparse.ArgumentParser(description="Rule-Finetune")
 
-    parser.add_argument("--dataset", type=str, default="LANG_8",
+    parser.add_argument("--dataset", type=str, default="CLUTRR",
                         choices=["default", "CLUTRR", "SST2", "LANG_8"],  # default包含一个通用的默认格式输入，暂时先不写
                         help="dataset used for experiment, should involve train, test at least")
 
@@ -43,8 +43,14 @@ def args_parse():
     parser.add_argument("--epoch", type=int, default=5,
                         help="epoch used for experiment")
 
-    parser.add_argument("--topN", type=int, default=1,
-                        help="output topN results in every call LLM.generate")
+    parser.add_argument("--cold_start_topN", type=int, default=5,
+                        help="output topN results for every call LLM.generate in cold start phase")
+
+    parser.add_argument("--cold_start_temperature", type=float, default=0.5,
+                        help="temperature used in cold start phase")
+
+    parser.add_argument("--cold_start_try_num", type=int, default=3,
+                        help="the number of tries in cold start phase")
 
     parser.add_argument("--train_rule_num", type=int, default=50,
                         help="the number of rules used in training phase")
@@ -63,15 +69,16 @@ def args_parse():
 
     parser.add_argument(
         "--encoder", type=str, default="all-MiniLM-L6-v2", help="which sentence-transformer encoder for clustering"
-    ) #源自autoCoT
+    )
 
-    parser.add_argument("--cot_trigger_type", type=str, default='lang8',
+    parser.add_argument("--cot_trigger_type", type=str, default='category_prompt',
                         choices=['category_prompt', 'lang8'],
-                        help="cot trigger type")
+                        help="zero-shot prompt for cold start phase")
 
-    parser.add_argument("--train_prompt_type", type=str, default='lang8',
-                        choices=['category_prompt'],
-                        help="train prompt type") #现在只是prompt_demos或者哪个函数绑定了这个的register。没有其他用处
+    parser.add_argument("--train_prompt_type", type=str, default=None, choices=None,
+                        help="instruction prompt for training phase with few-shot examples chosen automatically such as AutoCoT (NotImplemented), "
+                             "or use cot_trigger_prompt when None. "
+                             "Should use the same format as cot_trigger_prompt.")
 
     parser.add_argument("--force_check_rate", type=float, default=0.5,
                         help="used to decide whether to replace a rule with the one in rule_map, aims to control the "\
@@ -99,9 +106,10 @@ def args_parse():
             dataset = "Default"
             return get_prompt(prompt_dict, dataset, *args[0:1]) # 这里这个逻辑设计的非常奇怪
 
-    args.pred_trigger = get_prompt(prompt_dict, args.dataset, 'pred_trigger')
-    args.train_prompt = get_prompt(prompt_dict, args.dataset, 'train_prompt', args.train_prompt_type)# , not necessary for llms，不过会用于prompt_rules
-    args.cot_trigger = get_prompt(prompt_dict, args.dataset, 'CoT', args.cot_trigger_type)  # args.train_prompt + '\n' +, both are fine
+    args.cot_trigger = get_prompt(prompt_dict, args.dataset, 'CoT', args.cot_trigger_type)
+    args.pred_trigger = get_prompt(prompt_dict, args.dataset, 'pred_trigger') # the format used should be same as cot_trigger
+    args.train_prompt = get_prompt(prompt_dict, args.dataset, 'train_prompt', args.train_prompt_type) \
+        if args.train_prompt_type else args.cot_trigger
 
     args.direct_answer_trigger_for_zeroshot_cot = args.pred_trigger
 
@@ -120,7 +128,6 @@ def args_parse():
 
     if not os.path.exists(args.save_dir):
         os.makedirs(args.save_dir)
-
 
     if args.multi_thread:
         if os.path.exists(os.path.join(args.data_dir, "rationale/ZeroShotCoTParallel.jsonl")):
@@ -166,7 +173,7 @@ def main():
     llm_model = LLM(generate_func)
 
     cur_Trainer = Trainer(args, train_dataset, valid_dataset, test_dataset, llm_model,
-                          rule_base=DisjointSetRuleBase()) #topN是个小问题
+                          knowledge_base=KnowledgeBase()) #topN是个小问题
 
     if args.train:    # 需要cold start的时候运行
         cur_Trainer.cold_start()  # 存Answer的时候就clean一下

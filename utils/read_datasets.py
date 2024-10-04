@@ -3,8 +3,6 @@ import os
 from typing import List, Union, Tuple
 
 from utils.ExtraNameSpace import DatasetsReaderNameSpace
-import utils.read_funcs
-from utils.others import move_file_to_jsonl
 from utils.data import Example, DatasetLoader
 from operator import itemgetter
 
@@ -97,8 +95,8 @@ def read_datasets(args) -> (DatasetLoader, DatasetLoader, DatasetLoader):
 
     train_dataset, valid_dataset, test_dataset = \
         itemgetter('train', 'valid', 'test')(_adjust_dataset_format(train=train_dataset,
-                                                                   valid=valid_dataset,
-                                                                   test=test_dataset))
+                                                                    valid=valid_dataset,
+                                                                    test=test_dataset))
 
     return train_dataset, valid_dataset, test_dataset
 
@@ -109,9 +107,6 @@ def read_rationales(args, **kwargs):
     """
     rationale_path = args.rationale_path
 
-    move_file_to_jsonl(save_dir=os.path.join(args.data_dir, "rationale/parallel"),
-                       save_path=rationale_path)
-
     if os.path.exists(rationale_path):
         rationale_dataset = _read_preprocessed_data(rationale_path)
         """
@@ -121,15 +116,17 @@ def read_rationales(args, **kwargs):
             existed_sample.update(sample)
         """
         for sample in rationale_dataset:
-            e = Example(**sample)
+            e = Example(question=sample['question'],
+                        gold_label=sample['gold_label'])
             key = (e.question, e.gold_label)
+
             for _, value in kwargs.items():
                 if value:
-                    existed_sample = value._find(key, None)
+                    existed_sample = value.find(key, None)
                     # 有两类命名不统一，之后都得改改
                     # 1个是gold_ans和gold_label，另一个是answer和prediction
                     if existed_sample:
-                        existed_sample.update(sample, args) #update(e)应该更好
+                        existed_sample.update(sample, args)  # update(e)应该更好
                     break
 
     return itemgetter('train_dataset', 'valid_dataset', 'test_dataset')(kwargs)

@@ -1,3 +1,3 @@
 from .CLUTRR import *
-from .STS_B import *
+from .SST2 import *
 from .LANG_8 import *
