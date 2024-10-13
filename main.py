@@ -4,6 +4,7 @@ from Trainer.KnowledgeTrainer import Trainer
 from utils.data import KnowledgeBase
 from utils.llm import LLM, generate_func_mapping
 from utils.read_datasets import read_datasets, read_rationales
+import utils.read_funcs
 import argparse
 from utils.ExtraNameSpace import NameSpace
 
@@ -19,7 +20,7 @@ def args_parse():
                         choices=["default", "CLUTRR", "SST2", "LANG_8"],  # default包含一个通用的默认格式输入，暂时先不写
                         help="dataset used for experiment, should involve train, test at least")
 
-    parser.add_argument("--train_dataset_size", type=int, default=200,
+    parser.add_argument("--train_dataset_size", type=int, default=1000,
                         help="choose the first train_dataset_size examples from train dataset for training")
 
     parser.add_argument("--data_dir", type=str, default=None,
@@ -49,22 +50,19 @@ def args_parse():
     parser.add_argument("--cold_start_temperature", type=float, default=0.5,
                         help="temperature used in cold start phase")
 
-    parser.add_argument("--cold_start_try_num", type=int, default=3,
+    parser.add_argument("--cold_start_try_num", type=int, default=1,
                         help="the number of tries in cold start phase")
 
-    parser.add_argument("--train_rule_num", type=int, default=50,
-                        help="the number of rules used in training phase")
-
-    parser.add_argument("--train", type=bool, default=True,
+    parser.add_argument("--train", type=bool, default=False,
                         help="whether to train")
 
     parser.add_argument("--eval", type=bool, default=False,
                         help="whether to eval")
 
-    parser.add_argument("--test", type=bool, default=False,
+    parser.add_argument("--test", type=bool, default=True,
                         help="whether to test")
 
-    parser.add_argument("--cold_start_num", type=int, default=200,
+    parser.add_argument("--cold_start_num", type=int, default=500,
                         help="the number of examples chosen in cold start phase")
 
     parser.add_argument(
@@ -76,9 +74,13 @@ def args_parse():
                         help="zero-shot prompt for cold start phase")
 
     parser.add_argument("--train_prompt_type", type=str, default=None, choices=None,
-                        help="instruction prompt for training phase with few-shot examples chosen automatically such as AutoCoT (NotImplemented), "
+                        help="Instruction prompt for training phase with few-shot examples chosen automatically such as AutoCoT (NotImplemented), "
                              "or use cot_trigger_prompt when None. "
                              "Should use the same format as cot_trigger_prompt.")
+
+    parser.add_argument("--test_prompt_type", type=str, default=None, choices=None,
+                        help="Instruction prompt for training phase or use cot_trigger_prompt when None. "
+                             "It's better to use the same format as cot_trigger_prompt.")
 
     parser.add_argument("--force_check_rate", type=float, default=0.5,
                         help="used to decide whether to replace a rule with the one in rule_map, aims to control the "\
@@ -173,13 +175,11 @@ def main():
     llm_model = LLM(generate_func)
 
     cur_Trainer = Trainer(args, train_dataset, valid_dataset, test_dataset, llm_model,
-                          knowledge_base=KnowledgeBase()) #topN是个小问题
+                          knowledge_base=KnowledgeBase())  # topN是个小问题
 
     if args.train:    # 需要cold start的时候运行
         cur_Trainer.cold_start()  # 存Answer的时候就clean一下
-
-    # 2.3 进行训练
-    if args.train:
+        # 2.3 进行训练
         cur_Trainer.train()
 
     # # 3. 评估
@@ -187,11 +187,19 @@ def main():
     # if args.eval:
     #     cur_Trainer.eval()
     #     cur_Trainer.evaluate(is_valid=True)
-    #
-    # if args.test:
-    #     cur_Trainer.eval()
-    #     cur_Trainer.evaluate(is_valid=False)
 
+    if args.test:
+        cur_Trainer.test(r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_57',
+                         #r"D:\Github\Tuning_Explicitly\experiment\LANG_8\version_1",
+                         # args.save_dir,#
+                         use_epoch_file='final')
+        # 23可以，random 200 43.5, 配上inference 50可以0.455。但不记得训练方式了
+        # 25是最普通的random200，配上inference 50
+        # 26是inference 50训的，
+        # 28也是
+        # 34 200 48
+        # 37 200 48
+#
 
 if __name__ == '__main__':
     main()

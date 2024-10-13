@@ -1,17 +1,19 @@
 import os.path
+import re
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed  # 我先把多线程都取消了
 import random
 from typing import List, Tuple
 import json
 
-from utils.data import DatasetLoader, Example, Rationale, KnowledgeBase
+from utils.data import DatasetLoader, Example, Rationale, KnowledgeBase, Knowledge
 from utils.llm import LLM
 from utils.ExtraNameSpace import ScoreNameSpace
 from utils.extract_knowledge import extract_knowledge_texts
 import utils.extract_knowledge
 import utils.clean_prediction_func
 import utils.score
+from utils.llm_models import call_openai
 
 
 @ScoreNameSpace.register("Example")
@@ -48,7 +50,7 @@ def cold_start_inference(args, llm: LLM, dataset: DatasetLoader):
             line = json.loads(line)
             fail_examples.append(line['question'].strip())
 
-    cold_start_path = os.path.join(rationale_dir, "ColdStart.jsonl")
+    cold_start_path = os.path.join(rationale_dir, "ZeroShotCoTParallel.jsonl")
     if not os.path.exists(cold_start_path):
         with open(cold_start_path, 'w'):
             pass
@@ -57,7 +59,7 @@ def cold_start_inference(args, llm: LLM, dataset: DatasetLoader):
         if example_tmp.rationales:
             final_dict = example_tmp.to_dict()
             if example_tmp.rationales:
-                with open(cold_start_path, 'w') as fs:
+                with open(cold_start_path, 'a') as fs:
                     assert len(final_dict['rationale']) == len(final_dict['prediction'])
                     for ration, pred in zip(final_dict['rationale'], final_dict['prediction']):
                         tmp_dict = {'question': final_dict['question'].strip(),
@@ -100,7 +102,8 @@ def _cold_start_inference_single(args, llm: LLM, example: Example):
     for r, pred in rationales_answers_pair:
         r = Rationale(rationale=r, prediction=pred)
 
-        if is_high_quality_prediction(prediction=r.prediction.strip(), gold_label=pred.strip()):
+        if is_high_quality_prediction(prediction=r.prediction.strip(),
+                                      gold_label=example.gold_label.strip()):
             example.update_rationale(r)
             break
 
@@ -113,7 +116,7 @@ def _inference_single(llm: LLM, input_text: str, cot_trigger: str, direct_answer
     """
     cold_start_phase和其他的区别是，要多一层direct_answer_trigger_for_zeroshot_cot
     """
-    llm_input = cot_trigger + "\n" + input_text
+    llm_input = cot_trigger + "\n\n" + input_text
 
     rationales_answers_pair = []
     rationales = llm.generate_single_parallel(input_text=llm_input, model=llm_model,
@@ -137,23 +140,74 @@ def _inference_single(llm: LLM, input_text: str, cot_trigger: str, direct_answer
     return rationales_answers_pair
 
 
+def add_space(s):
+    """
+    add space after every comma if there is no space after it
+    """
+    return re.sub(r'(?<=[,])(?=[^\s])', r' ', s)
+
+
+def _tmp_adjust(args, knowledge_base: KnowledgeBase, train_prompt: str, input_text: str, **kwargs):
+    knowledge_memory = knowledge_base.get_inference_knowledge_memory()
+    knowledge_contents = [v[0].content for v in knowledge_memory.values() if v]
+    # knowledge_contents = [k.content for v in knowledge_memory.values() for k in v]
+
+    chosen_num = min(50, len(knowledge_contents))
+    chosen_knowledge = random.sample(knowledge_contents, chosen_num)
+
+    tmp_train_prompt = "Instruction: Following are several existed knowledge in knowledge base. When you answer the questions, try to use the provided knowledge whenever possible in \"we retrieve\" format. "\
+    "Try not to invent knowledge by yourself unless necessary. But if so, you are permitted to"\
+    "establish your own rules in \"we have\" format.\n"\
+    "Knowledge Base:\n"\
+    "brother's sister is sister."
+
+    prompt = tmp_train_prompt + '\n'.join(chosen_knowledge) + '\n\n' + train_prompt + '\n\n' + input_text.strip() + "\nAnswer:"
+
+    return prompt
+
+
 def llm_inference_category(args,
                            knowledge_base: KnowledgeBase,
                            llm: LLM,
                            train_prompt: str,
-                           input_text: str, **kwargs) -> str:
-    prompt = train_prompt + '\n' + input_text.strip() + "\nAnswer:"
+                           input_text: str,
+                           mode: str = "train",
+                           **kwargs) -> str:
+
+    assert mode in ["train", "eval"], "mode must be in ['train', 'eval']"
+
+    # if mode == 'train':
+    #     prompt = train_prompt + '\n\n' + input_text.strip() + "\nAnswer:"
+    # else:
+    prompt = _tmp_adjust(args, knowledge_base, train_prompt, input_text, **kwargs)
 
     input_length = len(prompt.split('\n'))
     current_line = 0  # 初始行数
 
     absent_set = set()
-    knowledge_memory = knowledge_base.get_knowledge_memory()     # 只建议读取，不写入
+    knowledge_memory = knowledge_base.get_knowledge_memory() if mode == "train" \
+        else knowledge_base.get_inference_knowledge_memory()
 
+    try_cnt = 0
+    max_tries = 15
     while True:
-        response = llm.generate_single(input_text=prompt, **kwargs)
+        try_cnt += 1
+        print("prompt:", prompt)
+
+        prompt = add_space(prompt)
+        response = llm.generate_single(input_text=prompt, model=args.llm_model, **kwargs)
+        response = response.replace("\n\n", "\n")
         whole_text = prompt + " " + response
-        pending_lines = whole_text.split('\n')[input_length-1:]  # 所有除去prompt的句子。每轮current_line不清零，所以不影响位置
+        pending_lines: List[str] = whole_text.split('\n')[input_length-1:]  # 所有除去prompt的句子。每轮current_line不清零，所以不影响位置
+
+        if not pending_lines:   # 针对输出仅一行
+            return response
+
+        if not hasattr(knowledge_base, 'vectorizer'):
+            warnings.warn(
+                "The knowledge_base has not yet execute memorization phase to build a vectorizer"
+            )
+            return response
 
         concepts = None
         sign = False
@@ -164,23 +218,26 @@ def llm_inference_category(args,
             if args.pred_trigger.lower() in line.lower():
                 break
 
-            if "we retrieve" in line.lower():
-                line = line[:line.lower().index("we retrieve")]
+            current_knowledge = extract_knowledge_texts(line)
+            if not current_knowledge:
+                continue
+
+            line = line[:line.lower().index(current_knowledge[0].lower())]
 
             concepts = knowledge_base.extract_key_concepts(doc_list=line,
                                                            vectorizer=knowledge_base.vectorizer)  # ["(A, B)"], 例外：A, B
 
-            if not concepts:
+            if not concepts or not len(concepts):
                 warnings.warn('No concepts found in line: ' + line)
                 continue
 
-            concepts = concepts[0]
+            concepts = concepts[0][1]
 
             if concepts not in knowledge_memory or not knowledge_memory[concepts]:
                 absent_set.add(concepts)
                 continue
 
-            if random.random() < args.force_check_rate:
+            if random.random() > args.force_check_rate:
                 continue
 
             sign = True
@@ -188,21 +245,29 @@ def llm_inference_category(args,
 
             break
 
-        if current_line >= len(pending_lines):
+        if current_line >= len(pending_lines) or try_cnt > max_tries:
             out = "\n".join(pending_lines)
+            print("response: ", out)
             return out
 
         if sign:
-            this_rule = random.choice(knowledge_memory[concepts])  # 随机，似乎不适合greedy
-            line = pending_lines[current_line+1]  # 因为回退了一行
-            current_rule = extract_knowledge_texts(line)
-            assert len(current_rule) == 1, "It's better to have only one rule in line: " + line
+            this_knowledge: Knowledge = random.choice(knowledge_memory[concepts]) if mode == "train" \
+                else knowledge_memory[concepts][0]  # 随机，似乎不适合greedy
+            line = pending_lines[current_line]
+            current_knowledge = extract_knowledge_texts(line)
 
-            current_rule = current_rule[0]
-            line = line[:line.index(current_rule)+len(current_rule)]
-            line = line.replace(current_rule, this_rule['rule_text'])
+            if len(current_knowledge) > 1:
+                warnings.warn("It's better to have only one knowledge in line: " + line)
+            # otherwise, you should design a more specific replacement strategy
 
-            prompt = "\n".join(whole_text.split("\n")[:current_line+input_length-1]) + '\n' + line  # 这个-1不一定对
+            current_knowledge = current_knowledge[0]
+            line = line[:line.index(current_knowledge)+len(current_knowledge)]
+            last_line = line
+            line = line.replace(current_knowledge, this_knowledge.content)
+            if line != last_line:
+                print(f"进行一次有效替换：{last_line} → {line}")
+
+            prompt = "\n".join(whole_text.split("\n")[:current_line+input_length-1]) + '\n' + line
             current_line += 1
 
             print('有替换！')

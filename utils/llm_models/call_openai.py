@@ -6,8 +6,8 @@ import time
 import openai
 import tiktoken
 
-openai.api_base = "https://api.chatanywhere.com.cn/v1"
-key_list = ["sk-CsxV63g13dws7G6xsQvaCTGUgeP4mVaomReDwolJVLttXpmA"]
+openai.api_base = "https://api.chatanywhere.tech"
+key_list = ["sk-R0EfwnmLCIAMbEbAUw0YofH6DwTXmBTtrkrJgfrWqiUAt4Dq"]#["sk-CsxV63g13dws7G6xsQvaCTGUgeP4mVaomReDwolJVLttXpmA"]
 key_choose = 0
 
 encoding = tiktoken.get_encoding("cl100k_base")
@@ -32,7 +32,7 @@ def cnt_tokens(message):
     return cnt
 
 
-def call_openai(input_text: Union[List[str], str], model="gpt-3.5-turbo-1106", is_gpt3=False, **kwargs) \
+def call_openai(input_text: Union[List[str], str], model="gpt-3.5-turbo-ca", is_gpt3=False, **kwargs) \
         -> Union[str, List[str]]:
     """
     lbq
@@ -88,6 +88,7 @@ def call_openai(input_text: Union[List[str], str], model="gpt-3.5-turbo-1106", i
                     return [c.message['content'].strip() for c in completion.choices]
 
         except Exception as e:
+            print("报错信息：", e, input_text)
             time.sleep(20 + 10 * random())
             key_choose = (key_choose + 1) % len(key_list)
 

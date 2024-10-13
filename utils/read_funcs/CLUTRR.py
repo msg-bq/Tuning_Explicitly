@@ -69,12 +69,12 @@ def read_func(data_dir):
     train_data, test_data = _read_CLUTRR_data(data_dir)
     keys = ['query', 'edge_types', 'target']
     train_data = train_data[keys]
-    droped_train_data = train_data.drop_duplicates(subset=keys, keep='first', inplace=False)
+    dropped_train_data = train_data.drop_duplicates(subset=keys, keep='first', inplace=False)
     # 随机打散数据集，固定seed
     for i in range(10):
-        droped_train_data = droped_train_data.sample(frac=1, random_state=42)
+        dropped_train_data = dropped_train_data.sample(frac=1, random_state=42)
 
-    sampling_train_data = _build_samples(droped_train_data.to_dict(orient='records'))
+    sampling_train_data = _build_samples(dropped_train_data.to_dict(orient='records'))
     final_train_datasets = _build_datasets_from_samples(sampling_train_data, question_template)
 
     test_data = [test_data[i][keys].drop_duplicates(subset=keys, keep='first', inplace=False)

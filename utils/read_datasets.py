@@ -29,8 +29,8 @@ def _read_preprocessed_data(path) -> List[dict]:     # 读取预处理
 
 
 def _save_preprocessed_data(data: List[dict], path):    # 保存预处理
-    if not os.path.exists(path):
-        os.makedirs(path)
+    # if not os.path.exists(path):
+    #     os.makedirs(path) todo: 这里文件夹创建奇怪
 
     with open(path, 'w', encoding="utf8") as f:
         for sample in data:

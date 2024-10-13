@@ -2,6 +2,7 @@ import json
 import os.path
 import pickle
 from collections import defaultdict
+from copy import deepcopy
 from random import choices
 from typing import List, Dict, Optional, Union, Tuple, overload, Set, Any
 
@@ -21,6 +22,7 @@ class KnowledgeSource:
 
         assert isinstance(knowledge, str), "knowledge should be str, not %s" % type(knowledge)
         self.related_context = self._get_related_context(knowledge)
+        self.concepts = None  # 对应context的类别，用concepts或categorys代替
 
     def _get_related_context(self, knowledge: str) -> str:
         """
@@ -31,7 +33,9 @@ class KnowledgeSource:
         contexts = self.rationale.rationale.split('\n')
         for context in contexts:
             if knowledge in context:
-                return context[:context.index(knowledge)]
+                return context[:context.index(knowledge)]  # todo: 每个样例这里只考虑了第一次出现。如果后续修改的话
+            # 最好是从related_context的输入端就进行控制，即knowledge本身抽取时记录对应的context，再处理
+            # 但暂时校验是充分的，这一点没有特别的必要
 
         raise ValueError(f"{knowledge} not in rationale")
 
@@ -53,7 +57,7 @@ class Knowledge:
     def __init__(self, content: str, related_info: Union[knowledge_info, List[knowledge_info]] = None):
         self.content = content
         # self.confidence = 0
-        self.source: Set[KnowledgeSource] = set()
+        self.sources: Set[KnowledgeSource] = set()
 
         if related_info:
             self.load_source(related_info)
@@ -63,13 +67,13 @@ class Knowledge:
 
     def load_source(self, related_info: knowledge_info):
         if isinstance(related_info, dict):
-            self.source.add(KnowledgeSource(knowledge=self.content,
-                                            question=related_info['question'],
-                                            rationale=related_info['rationale'],
-                                            score=related_info['score']))
+            self.sources.add(KnowledgeSource(knowledge=self.content,
+                                             question=related_info['question'],
+                                             rationale=related_info['rationale'],
+                                             score=related_info['score']))
 
         elif isinstance(related_info, KnowledgeSource):
-            self.source.add(related_info)
+            self.sources.add(related_info)
 
         elif isinstance(related_info, list):
             for k in related_info:
@@ -79,16 +83,37 @@ class Knowledge:
             raise TypeError
 
     def get_source_context(self) -> List[str]:
-        return [s.related_context for s in self.source]
+        sources = self.sources
+        return [s.related_context for s in sources]
 
-    def update_source(self, question: str, rationale: 'Rationale', score: float):
-        self.source.add(KnowledgeSource(knowledge=self.content,
-                                        question=question,
-                                        rationale=rationale,
-                                        score=score))
+    def update_source(self, question: str = None, rationale: 'Rationale' = None, score: float = None,
+                      sources: Union[KnowledgeSource, List[KnowledgeSource]] = None):
+        """
+        :param question:
+        :param rationale:
+        :param score:
+        :param sources:  允许以KnowledgeSource的格式传入和更新，或者只传入前三个
+        :return:
+        """
+        assert (question is not None and score is not None) or sources, ("must have question and score or sources, "
+                                                                         "question: %s, score: %s, sources: %s" % (
+                                                                             question, score, sources))
+
+        self.sources.add(KnowledgeSource(knowledge=self.content,
+                                         question=question,
+                                         rationale=rationale,
+                                         score=score))
+
+        if sources:
+            if isinstance(sources, list):
+                self.sources = self.sources | set(sources)
+            elif isinstance(sources, KnowledgeSource):
+                self.sources.add(sources)
+            else:
+                raise TypeError
 
     def get_confidence(self) -> float:
-        return self.get_success_num() / (len(self.source)+10)
+        return self.get_success_num() / (len(self.sources) + 10)
 
     @staticmethod
     def _is_success(source: KnowledgeSource):
@@ -97,15 +122,17 @@ class Knowledge:
         """
         return source.score > 0.8
 
-    def get_success_num(self) -> int:
-        return len([s for s in self.source if self._is_success(s)])
+    def get_success_num(self, concepts=None) -> int:
+        sources = [s for s in self.sources if s.concepts == concepts] if concepts else self.sources.copy()
+        return len([s for s in sources if self._is_success(s)])
 
-    def get_failure_num(self) -> int:
-        return len(self.source) - self.get_success_num()
+    def get_failure_num(self, concepts=None) -> int:
+        sources = [s for s in self.sources if s.concepts == concepts] if concepts else self.sources.copy()
+        return len(sources) - self.get_success_num(concepts)
 
     def dumps(self):
         return {'content': self.content,
-                'source_questions': [s.dumps() for s in self.source]}
+                'source_questions': [s.dumps() for s in self.sources]}
 
     @staticmethod
     def loads(knowledge: Dict) -> 'Knowledge':
@@ -113,14 +140,17 @@ class Knowledge:
             raise KeyError("The content is not in the dict")
 
         return Knowledge(content=knowledge['content'],
-                         related_info=[KnowledgeSource.loads(s)
+                         related_info=[KnowledgeSource.loads({**eval(s), **{'knowledge': knowledge['content']}})
                                        for s in knowledge['source_questions']])
 
 
 class KnowledgeBase:
     def __init__(self):
         self._content_to_instance: Dict[str, Knowledge] = dict()
-        self._knowledge_memory: Dict[str, List[Knowledge]] = defaultdict(list)
+        self._knowledge_memory: Dict[Union[str, tuple], List[Knowledge]] = defaultdict(list)
+
+    def __len__(self):
+        return len(self._content_to_instance)
 
     def get_knowledge_by_content(self, content: str) -> Optional[Knowledge]:
         instance = self._content_to_instance.get(content)
@@ -140,14 +170,12 @@ class KnowledgeBase:
 
         raise TypeError("knowledge in '_split_knowledge_text' func should be str")
 
-    def _find_knowledge_instance(self, knowledge: Union[str, List[Union[str, Knowledge]]],
-                                 knowledge_source: List['KnowledgeSource']) \
-            -> Set[Knowledge]:
+    def _find_knowledge_instance(self, knowledge: Union[str, List[Union[str, Knowledge]]]) -> Set[Knowledge]:
         knowledge = self._split_knowledge_text(knowledge) if isinstance(knowledge, str) else knowledge
         knowledge = [k.content if isinstance(k, Knowledge) else k for k in knowledge]  # 不假设"Knowledge类型=在KB里"
 
         knowledge_instances = set([self._content_to_instance[k] if k in self._content_to_instance
-                                   else self._add_knowledge(k, knowledge_source) for k in knowledge])
+                                   else self._add_knowledge(k) for k in knowledge])
 
         return knowledge_instances
 
@@ -161,46 +189,37 @@ class KnowledgeBase:
         :param question: 问题
         本函数现在还不支持batch，连带着后面的find_instance之类的都不支持
         """
-        if not isinstance(knowledge_texts, list):
+        if isinstance(knowledge_texts, str):
             knowledge_texts = [knowledge_texts]
 
-        knowledge_sources = []
-        for k in knowledge_texts:
-            knowledge_source = KnowledgeSource(knowledge=k,
-                                               question=question,
-                                               rationale=rationale,
-                                               score=score)
+        knowledge_instances = self._find_knowledge_instance(knowledge_texts)
 
-            knowledge_sources.append(knowledge_source)
+        for k in knowledge_instances:
+            k.update_source(question=question,
+                            rationale=rationale,
+                            score=score)
 
-        knowledges = self._find_knowledge_instance(knowledge_texts, knowledge_sources)
+        return list(knowledge_instances)
 
-        return list(knowledges)
-
-    def __add_knowledge(self, knowledge: str, knowledge_source: List['KnowledgeSource']) -> Knowledge:
-        knowledge_instance = Knowledge(content=knowledge, related_info=knowledge_source)
+    def __add_knowledge(self, knowledge: str) -> Knowledge:
+        knowledge_instance = Knowledge(content=knowledge)
         self._content_to_instance[knowledge] = knowledge_instance
 
         return knowledge_instance
 
-    def _add_knowledge(self, knowledge: Union[List[str], str], knowledge_sources: List['KnowledgeSource'],
-                       scores: Union[List[float], float] = None) -> Union[Knowledge, List[Knowledge]]:
+    def _add_knowledge(self, knowledge: Union[List[str], str]) -> Union[Knowledge, List[Knowledge]]:
         """
         这里需要一个添加knowledge的函数，包括将字符串转为str+查重+添加
         这个函数只add，不检查是否存在
+        输入输出的type保持一致，均为iteration或普通数值类型
         """
-        if not scores:
-            scores = 1.0 if isinstance(knowledge, str) else [1.0] * len(knowledge)
-
-        if isinstance(knowledge, list):
-            assert len(knowledge) == len(scores), "The length of knowledge and scores should be the same"
-
         if isinstance(knowledge, str):
-            return self.__add_knowledge(knowledge, knowledge_sources)
-        elif isinstance(knowledge, list):
-            new_knowledge_instances = [self.__add_knowledge(knowledge, knowledge_sources) for
-                                       knowledge, score in zip(knowledge, scores)]
-            return new_knowledge_instances
+            return self.__add_knowledge(knowledge)
+        else:
+            return [self.__add_knowledge(k) for k in knowledge]
+
+    # def _append_knowledge_source(self, knowledge_source: Union[KnowledgeSource, List[KnowledgeSource]]):
+    #     pass
 
     def broadcast_knowledge_info(self):
         """可能存在的同步需求"""
@@ -219,8 +238,7 @@ class KnowledgeBase:
                 self._content_to_instance[knowledge.content] = knowledge
 
     def save_knowledge_memory(self, knowledge_memory_path: str, vectorizer_path: str = None):
-        if not os.path.exists(knowledge_memory_path):
-            self._save_knowledge(knowledge_memory_path)
+        self._save_knowledge(knowledge_memory_path)
 
         if vectorizer_path and hasattr(self, 'vectorizer') and self.vectorizer is not None:
             with open(vectorizer_path, 'wb') as file:
@@ -233,9 +251,11 @@ class KnowledgeBase:
             with open(vectorizer_path, 'rb') as file:
                 self.vectorizer = pickle.load(file)
 
-            self.build_conceptual_memory()
+            learned_info = self._get_memory_learned_info()
+            self._update_knowledge_memories(learned_info=learned_info, topn=2)
 
-    def _update_knowledge_memory(self, concepts_chain: List[Any], knowledge_chain: Union[Knowledge, List[Knowledge]]):
+    def _update_knowledge_memory(self, concepts_chain: List[Tuple[str, tuple]],
+                                 knowledge_chain: Union[Knowledge, List[Knowledge]]):
         """
         这个函数暂时封装的意义不大，只是看之后有无其他函数也需要调用
         """
@@ -244,15 +264,15 @@ class KnowledgeBase:
 
         assert len(concepts_chain) == len(knowledge_chain)
 
-        for concepts, knowledge in zip(concepts_chain, knowledge_chain):
-            if knowledge not in self._knowledge_memory[concepts]:
-                self._knowledge_memory[concepts].append(knowledge)
+        for (context, concept), knowledge in zip(concepts_chain, knowledge_chain):
+            if knowledge not in self._knowledge_memory[concept]:  # 这个复杂度倒是不值得set带来的麻烦
+                self._knowledge_memory[concept].append(knowledge)
 
     def get_knowledge_memory(self):
         return self._knowledge_memory
 
     @classmethod
-    def extract_key_concepts(self, doc_list: Union[str, List[str]], vectorizer, topn=2) -> List[Tuple[str, tuple]]:
+    def extract_key_concepts(cls, doc_list: Union[str, List[str]], vectorizer, topn=2) -> List[Tuple[str, tuple]]:
         def _sort_coo(coo_matrix):
             tuples = zip(coo_matrix.col, coo_matrix.data)
             return sorted(tuples, key=lambda x: (x[1], x[0]), reverse=True)
@@ -276,8 +296,6 @@ class KnowledgeBase:
             sorted_items = sorted(sorted_items, key=lambda x: x[1])
 
             key_concepts = [word for word, _ in sorted_items[:topn]]
-            # for idx, score in sorted_items[:topn]:
-            #     key_concepts.append(vectorizer.reversed_vocabulary[idx])
 
             doc_concepts.append((doc, tuple(key_concepts)))
 
@@ -305,31 +323,85 @@ class KnowledgeBase:
         """
         return list(self._content_to_instance.values())
 
-    def build_conceptual_memory(self):
-        """
-        实现功能的函数是_build_conceptual_memory，换记忆方法时需要重载。而此函数很多是为了日志、改分等对齐而写的
-        """
-        learned_info: List[Knowledge] = self._get_memory_learned_info()
-
-        doc_list = []
-        for knowledge in learned_info:
-            doc_list.extend(knowledge.get_source_context())
-
-        if not doc_list:
-            return
-
-        self._build_conceptual_memory(doc_list=doc_list)
-
-        topn = 2
-
+    def _update_knowledge_memories(self, learned_info: List[Knowledge], topn: int = 2):
         for knowledge in learned_info:
             contexts = knowledge.get_source_context()
             doc_concepts = self.extract_key_concepts(doc_list=contexts,
                                                      vectorizer=self.vectorizer,
                                                      topn=topn)
 
-            self._update_knowledge_memory(concepts_chain=[c for _, c in doc_concepts],
+            # 这个数据结构有点奇怪，应该在一个更优雅的地方把sources改了，或者就在上面
+            for (_, concepts), source in zip(doc_concepts, knowledge.sources):
+                source.concepts = concepts
+
+            self._update_knowledge_memory(concepts_chain=doc_concepts,
                                           knowledge_chain=knowledge)
+
+    def _extract_doc_list_from_learned_info(self) -> Tuple[List[str], List[Knowledge]]:
+        learned_info: List[Knowledge] = self._get_memory_learned_info()
+
+        doc_list = []
+        for knowledge in learned_info:
+            doc_list.extend(knowledge.get_source_context())
+
+        return doc_list, learned_info
+
+    def build_conceptual_memory(self):
+        """
+        实现功能的函数是_build_conceptual_memory，换记忆方法时需要重载。而此函数很多是为了日志、改分等对齐而写的
+        """
+        doc_list, learned_info = self._extract_doc_list_from_learned_info()
+
+        if not doc_list:
+            return
+
+        self._build_conceptual_memory(doc_list=doc_list)
+
+        self._update_knowledge_memories(learned_info=learned_info, topn=2)
+
+    @staticmethod
+    def _sort_knowledge_memory(knowledge_memory: Dict[str, List[Knowledge]]) \
+            -> Dict[Union[str, tuple], List[Knowledge]]:
+        """
+        :return: 对knowledge memory做排序，用于推理阶段
+        """
+        for k in knowledge_memory:
+            knowledge_memory[k] = sorted(knowledge_memory[k],
+                                         key=lambda x: x.get_confidence(),
+                                         reverse=True)
+
+        return knowledge_memory
+
+    @staticmethod
+    def _filter_knowledge_memory(knowledge_memory: Dict[str, List[Knowledge]]) \
+            -> Dict[Union[str, tuple], List[Knowledge]]:
+        """
+        推理时过滤掉质量过低的knowledge
+        """
+        for k in knowledge_memory:
+            knowledge_memory[k] = [v for v in knowledge_memory[k] if v.get_success_num(k) > v.get_failure_num(k)/2]
+
+        knowledge_memory = {k: v for k, v in knowledge_memory.items() if v}
+
+        return knowledge_memory
+
+    def get_inference_knowledge_memory(self) -> Dict[Union[str, tuple], List[Knowledge]]:
+        return self._sort_knowledge_memory(self._filter_knowledge_memory(self.get_knowledge_memory()))
+
+    def set_knowledge_memory(self, knowledge_memory: Dict[str, List[Knowledge]]):
+        self._knowledge_memory = knowledge_memory
+
+    def __deepcopy__(self, memo):
+        """
+        创建一个KB的副本
+        """
+        cls = self.__class__
+        new_kb = cls.__new__(cls)
+        memo[id(self)] = new_kb
+        for k, v in self.__dict__.items():
+            setattr(new_kb, k, deepcopy(v, memo))
+
+        return new_kb
 
 
 class Rationale:  # 修正到只有两个属性
@@ -337,15 +409,15 @@ class Rationale:  # 修正到只有两个属性
     top-N的结果，rationale和prediction
     """
 
-    def __init__(self, rationale: str, prediction: str):
+    def __init__(self, rationale: str, prediction: str, *args, **kwargs):
         self.rationale = rationale.strip()
         self.prediction = self.clean_prediction(prediction)
         self.knowledge_texts = list(self.get_knowledge_texts())  # 这里就不转换knowledge_text为knowledge instance了，感觉没必要
         # 就靠knowledge source存储即可，分析
 
-    @classmethod
+    @staticmethod
     @KnowledgeExtractionNameSpace.register("Example")
-    def extract_knowledge_texts(cls, rationale) -> List[str]:
+    def extract_knowledge_texts(rationale) -> List[str]:
         pass
 
     def get_knowledge_texts(self) -> Union[Set[str], List[str]]:
@@ -507,7 +579,7 @@ class Example:
         """
         question_name = self.question.split('\n')[-1].strip()[10:].strip()[
                         :-6].lower()  # this special case only serve for
-        # CLUTRR, and it doesn't work for the other benchmark, so it is not a big deal, and you can adjust it for others.
+        # CLUTRR, and it doesn't work for the other benchmarks, so it is not a big deal, and you can adjust it for free.
         pred_trigger = args.pred_trigger.lower() if args else "the answer is"
 
         if pred_trigger in response.lower():

@@ -8,6 +8,15 @@ def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
     """
     return prediction.strip() == gold_label.strip()
 
+@ScoreNameSpace.register("CLUTRR")
+def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
+    prediction = (prediction.lower().strip()
+                  .replace("step-", "").replace("step", "").replace("-in-law", ""))
+    gold_label = (gold_label.lower().strip()
+                  .replace("step-", "").replace("step", "").replace("-in-law", ""))
+
+    return prediction == gold_label
+
 
 @ScoreNameSpace.register("LANG_8")
 def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:

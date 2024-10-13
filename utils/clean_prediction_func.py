@@ -35,6 +35,7 @@ def clean_prediction(self, prediction: str) -> str:
 
     return pred_words[-1].strip()
 
+
 @PredictionCleanNameSpace.register("SST2")
 def clean_prediction(self, prediction: str) -> str:
     prediction = prediction.strip().lower()
