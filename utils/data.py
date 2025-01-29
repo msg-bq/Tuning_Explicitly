@@ -6,6 +6,8 @@ from copy import deepcopy
 from random import choices
 from typing import List, Dict, Optional, Union, Tuple, overload, Set, Any
 
+import numpy as np
+
 from utils.ExtraNameSpace import PredictionCleanNameSpace, KnowledgeExtractionNameSpace
 import utils.extract_knowledge
 
@@ -123,11 +125,13 @@ class Knowledge:
         return source.score > 0.8
 
     def get_success_num(self, concepts=None) -> int:
-        sources = [s for s in self.sources if s.concepts == concepts] if concepts else self.sources.copy()
+        sources = self.sources.copy()
+        sources = [s for s in sources if s.concepts == concepts] if concepts else sources
         return len([s for s in sources if self._is_success(s)])
 
     def get_failure_num(self, concepts=None) -> int:
-        sources = [s for s in self.sources if s.concepts == concepts] if concepts else self.sources.copy()
+        sources = self.sources.copy()
+        sources = [s for s in sources if s.concepts == concepts] if concepts else sources
         return len(sources) - self.get_success_num(concepts)
 
     def dumps(self):
@@ -272,7 +276,7 @@ class KnowledgeBase:
         return self._knowledge_memory
 
     @classmethod
-    def extract_key_concepts(cls, doc_list: Union[str, List[str]], vectorizer, topn=2) -> List[Tuple[str, tuple]]:
+    def _extract_key_concepts_tfidf(cls, doc_list: Union[str, List[str]], vectorizer, topn=2) -> List[Tuple[str, tuple]]:
         def _sort_coo(coo_matrix):
             tuples = zip(coo_matrix.col, coo_matrix.data)
             return sorted(tuples, key=lambda x: (x[1], x[0]), reverse=True)
@@ -300,6 +304,27 @@ class KnowledgeBase:
             doc_concepts.append((doc, tuple(key_concepts)))
 
         return doc_concepts
+
+    @classmethod
+    def _extract_key_concepts_hyperplane(cls, doc_list: str | list[str], vectorizer) -> list[tuple[str, tuple]]:
+        # encode
+        complaint_embeddings = cls.encoder.encode(list(data['review']))
+
+        n = len(doc_list)  # Number of documents
+        n_planes = int(np.log2(n / 16))  # hack: 这里也有个特殊的参数
+        n_repeats = 25  # Number of hash tables
+
+
+
+    @classmethod
+    def extract_key_concepts(cls, doc_list: Union[str, List[str]], vectorizer, func_name='hyperplane',
+                             *args, **kwargs) -> list[tuple[str, tuple]]:
+        funcs_dict = {'tfidf': cls._extract_key_concepts_tfidf,
+                      'hyperplane': cls._extract_key_concepts_hyperplane}
+
+        func = funcs_dict.get(func_name, cls._extract_key_concepts_tfidf)
+
+        return func(doc_list, vectorizer, *args, **kwargs)
 
     def _build_conceptual_memory(self, doc_list: List[str]):
         """
@@ -346,6 +371,20 @@ class KnowledgeBase:
 
         return doc_list, learned_info
 
+    @staticmethod
+    def stop_words_filter(doc_list: List[str], stop_words: List[str]):
+        """此函数留空，暂时没有纳入算法"""
+        # tokenizer, 这里用split代替
+        filter_doc_list = []
+        for doc in doc_list:
+            word_list = doc.split()
+            filter_word_list = [word for word in word_list if word not in stop_words]
+            if word_list:
+                filter_doc_list.append(' '.join(filter_word_list))
+
+        return filter_doc_list
+
+
     def build_conceptual_memory(self):
         """
         实现功能的函数是_build_conceptual_memory，换记忆方法时需要重载。而此函数很多是为了日志、改分等对齐而写的
@@ -354,6 +393,12 @@ class KnowledgeBase:
 
         if not doc_list:
             return
+
+        # 只是实现在这里，但本次投稿、训练时候先不加
+        # doc_list = self.stop_words_filter(doc_list=doc_list,
+        #                                   stop_words=['sentence', 'phrase', 'retrieve',
+        #                                               'have', 'answer'])
+        # 对于tf-idf，从源头删除就够了，因为inference时，train不存在的会被丢弃
 
         self._build_conceptual_memory(doc_list=doc_list)
 

@@ -3,6 +3,7 @@ from functools import partial
 from typing import Optional, List
 
 from utils.llm_models import *
+from utils.llm_models.call_glm import call_glm
 
 
 def generate_func_mapping(model: str) -> callable:
@@ -12,7 +13,7 @@ def generate_func_mapping(model: str) -> callable:
 
     prefix_func_mapping = {'gpt': (openai_prefix, call_openai),
                            'openchat': (openchat_prefix, call_openchat),
-                           # 'glm': (glm_prefix, call_glm)
+                           'glm': (glm_prefix, call_glm)
                            }
 
     for _, (prefixes, func) in prefix_func_mapping.items():

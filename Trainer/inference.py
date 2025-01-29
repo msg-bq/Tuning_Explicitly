@@ -150,7 +150,6 @@ def add_space(s):
 def _tmp_adjust(args, knowledge_base: KnowledgeBase, train_prompt: str, input_text: str, **kwargs):
     knowledge_memory = knowledge_base.get_inference_knowledge_memory()
     knowledge_contents = [v[0].content for v in knowledge_memory.values() if v]
-    # knowledge_contents = [k.content for v in knowledge_memory.values() for k in v]
 
     chosen_num = min(50, len(knowledge_contents))
     chosen_knowledge = random.sample(knowledge_contents, chosen_num)
@@ -158,8 +157,7 @@ def _tmp_adjust(args, knowledge_base: KnowledgeBase, train_prompt: str, input_te
     tmp_train_prompt = "Instruction: Following are several existed knowledge in knowledge base. When you answer the questions, try to use the provided knowledge whenever possible in \"we retrieve\" format. "\
     "Try not to invent knowledge by yourself unless necessary. But if so, you are permitted to"\
     "establish your own rules in \"we have\" format.\n"\
-    "Knowledge Base:\n"\
-    "brother's sister is sister."
+    "Knowledge Base:\n"
 
     prompt = tmp_train_prompt + '\n'.join(chosen_knowledge) + '\n\n' + train_prompt + '\n\n' + input_text.strip() + "\nAnswer:"
 
@@ -176,10 +174,10 @@ def llm_inference_category(args,
 
     assert mode in ["train", "eval"], "mode must be in ['train', 'eval']"
 
-    # if mode == 'train':
-    #     prompt = train_prompt + '\n\n' + input_text.strip() + "\nAnswer:"
-    # else:
-    prompt = _tmp_adjust(args, knowledge_base, train_prompt, input_text, **kwargs)
+    if mode == 'train':
+        prompt = train_prompt + '\n\n' + input_text.strip() + "\nAnswer:"
+    else:
+        prompt = _tmp_adjust(args, knowledge_base, train_prompt, input_text, **kwargs)
 
     input_length = len(prompt.split('\n'))
     current_line = 0  # 初始行数
@@ -239,6 +237,28 @@ def llm_inference_category(args,
 
             if random.random() > args.force_check_rate:
                 continue
+
+            # =============
+            this_knowledge: Knowledge = random.choice(knowledge_memory[concepts]) if mode == "train" \
+                else knowledge_memory[concepts][0]  # 随机，似乎不适合greedy
+            line = pending_lines[current_line-1]
+            current_knowledge = extract_knowledge_texts(line)
+
+            if not current_knowledge:
+                continue
+
+            if len(current_knowledge) > 1:
+                warnings.warn("It's better to have only one knowledge in line: " + line)
+            # otherwise, you should design a more specific replacement strategy
+
+            current_knowledge = current_knowledge[0]
+            line = line[:line.index(current_knowledge) + len(current_knowledge)]
+            last_line = line
+            line = line.replace(current_knowledge, this_knowledge.content)
+            if line == last_line:
+                continue
+            # =============
+
 
             sign = True
             current_line -= 1

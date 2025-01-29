@@ -35,7 +35,7 @@ def cnt_tokens(message):
 def call_openai(input_text: Union[List[str], str], model="gpt-3.5-turbo-ca", is_gpt3=False, **kwargs) \
         -> Union[str, List[str]]:
     """
-    lbq
+
     List[str] GPT存在历史，str 不存在历史
     """
     if 'topN' in kwargs:

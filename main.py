@@ -20,7 +20,7 @@ def args_parse():
                         choices=["default", "CLUTRR", "SST2", "LANG_8"],  # default包含一个通用的默认格式输入，暂时先不写
                         help="dataset used for experiment, should involve train, test at least")
 
-    parser.add_argument("--train_dataset_size", type=int, default=1000,
+    parser.add_argument("--train_dataset_size", type=int, default=200,
                         help="choose the first train_dataset_size examples from train dataset for training")
 
     parser.add_argument("--data_dir", type=str, default=None,
@@ -35,7 +35,7 @@ def args_parse():
     parser.add_argument("--llm_model", type=str,
                         choices=["davinci", "gpt-3.5-turbo", "gpt-3.5-turbo-ca", "gpt-3.5-turbo-0613",
                                  "gpt-3.5-turbo-1106", "gpt-4-1106-preview", "gpt-4-turbo-2024-04-09",
-                                 "gpt-4o-ca"],
+                                 "gpt-4o-ca", "glm-3-turbo"],
                         default="gpt-3.5-turbo-ca", help="language model used for experiment")
 
     parser.add_argument("--multi_thread", type=bool, default=True,
@@ -53,7 +53,7 @@ def args_parse():
     parser.add_argument("--cold_start_try_num", type=int, default=1,
                         help="the number of tries in cold start phase")
 
-    parser.add_argument("--train", type=bool, default=False,
+    parser.add_argument("--train", type=bool, default=True,
                         help="whether to train")
 
     parser.add_argument("--eval", type=bool, default=False,
@@ -62,7 +62,7 @@ def args_parse():
     parser.add_argument("--test", type=bool, default=True,
                         help="whether to test")
 
-    parser.add_argument("--cold_start_num", type=int, default=500,
+    parser.add_argument("--cold_start_num", type=int, default=20,
                         help="the number of examples chosen in cold start phase")
 
     parser.add_argument(
@@ -78,7 +78,7 @@ def args_parse():
                              "or use cot_trigger_prompt when None. "
                              "Should use the same format as cot_trigger_prompt.")
 
-    parser.add_argument("--test_prompt_type", type=str, default=None, choices=None,
+    parser.add_argument("--test_prompt_type", type=str, default="test_prompt", choices=None,
                         help="Instruction prompt for training phase or use cot_trigger_prompt when None. "
                              "It's better to use the same format as cot_trigger_prompt.")
 
@@ -112,6 +112,8 @@ def args_parse():
     args.pred_trigger = get_prompt(prompt_dict, args.dataset, 'pred_trigger') # the format used should be same as cot_trigger
     args.train_prompt = get_prompt(prompt_dict, args.dataset, 'train_prompt', args.train_prompt_type) \
         if args.train_prompt_type else args.cot_trigger
+    args.test_prompt = get_prompt(prompt_dict, args.dataset, args.test_prompt_type) \
+        if args.test_prompt_type else args.cot_trigger
 
     args.direct_answer_trigger_for_zeroshot_cot = args.pred_trigger
 
@@ -161,7 +163,6 @@ def main():
 
     # 1. 读取数据集
     train_dataset, valid_dataset, test_dataset = read_datasets(args)
-
     if args.rationale_path:
         train_dataset, valid_dataset, test_dataset = read_rationales(args,
                                                                      train_dataset=train_dataset,
@@ -189,17 +190,25 @@ def main():
     #     cur_Trainer.evaluate(is_valid=True)
 
     if args.test:
-        cur_Trainer.test(r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_57',
-                         #r"D:\Github\Tuning_Explicitly\experiment\LANG_8\version_1",
-                         # args.save_dir,#
+        # args.save_dir = r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71'
+        cur_Trainer.test(#r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_86',
+                         # r"D:\Github\Tuning_Explicitly\experiment\LANG_8\version_6",
+                         args.save_dir,
                          use_epoch_file='final')
-        # 23可以，random 200 43.5, 配上inference 50可以0.455。但不记得训练方式了
         # 25是最普通的random200，配上inference 50
         # 26是inference 50训的，
         # 28也是
         # 34 200 48
         # 37 200 48
-#
+        # 69 200s
+        # 71 2000 58
+        # 72 381 0.575
+        # 73, 74 top 200。74好像是 0.45
+        # 76 2000 TOp we retrieve 0.45 然后给个上限的分析
+        # 78 glm-3-turbo
+        # 训练过程基本非常稳定，随便选一个version+重复3遍做最后的实验即可
+        # 86是5000
+
 
 if __name__ == '__main__':
     main()

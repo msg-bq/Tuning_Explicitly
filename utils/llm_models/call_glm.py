@@ -35,7 +35,7 @@ def cnt_tokens(message):
 def call_glm(input_text: Union[List[str], str], model="glm-3-turbo", **kwargs) \
         -> Union[str, List[str]]:
     """
-    lbq
+
     List[str] GPT存在历史，str 不存在历史
     """
 

@@ -1,3 +1,5 @@
+import json
+import os
 import threading
 import warnings
 from concurrent.futures import ThreadPoolExecutor
@@ -9,6 +11,7 @@ from utils.llm import LLM
 import Levenshtein
 
 from logger import logger
+
 
 
 class Trainer:
@@ -92,6 +95,30 @@ class Trainer:
         else:
             score = 1 - 2 * edit_distance / max(len(pred), len(gold))
         return score
+
+    @staticmethod
+    def _lang8_metric(examples: list[Example], preds: list[str]):
+        answer_triple = []
+
+        import re
+        from utils.metrics.compare_m2 import score_dataset
+
+        def _extract_sentence(ex: Example):
+            pattern = "Sentence: (.+?)\n"
+            match = re.search(pattern, ex.question)
+            if match:
+                return match.group(1)
+            else:
+                raise ValueError("no match")
+
+        for example, pred in zip(examples, preds):
+            gold_label = example.gold_label
+            original_sentence = _extract_sentence(example)
+            pred = original_sentence if pred == "ORIGINAL_SENTENCE" else pred
+            answer_triple.append((original_sentence, pred, gold_label))
+
+        return score_dataset(answer_triple)
+
 
     def backward(self, example: Example,
                  rationale: Rationale,
@@ -184,14 +211,14 @@ class Trainer:
         response = llm_inference_category(args=self.args,
                                           knowledge_base=self.knowledge_base,
                                           llm=self.llm,
-                                          train_prompt=self.args.train_prompt,
+                                          train_prompt=self.args.test_prompt,
                                           input_text=example.question,
                                           mode='eval')
 
         rationale = example.parse_response(response, self.args)
         prediction = Rationale.clean_prediction(rationale['prediction'])
 
-        return prediction, example.gold_label
+        return prediction, example
 
     def evaluate(self, is_valid=False, special_datasets: DatasetLoader = None):
         """
@@ -200,20 +227,55 @@ class Trainer:
         eval_type = "valid" if is_valid else "test"
         datasets = special_datasets if special_datasets else self.valid_dataset if is_valid else self.test_dataset
 
+        def _get_save_file() -> str:
+            file_cnt = 0
+            save_dir = self.args.save_dir
+            while os.path.exists(os.path.join(save_dir, './all_rationale{}'.format(file_cnt))) and \
+                    len(open(os.path.join(save_dir, './all_rationale{}'.format(file_cnt)), 'r',
+                             encoding='utf-8').readlines()) > 150:
+                file_cnt += 1
+
+            return os.path.join(save_dir, './all_rationale{}'.format(file_cnt))
+
+        save_file = _get_save_file()
+        with open(save_file, 'w', encoding="utf8") as f:
+            pass
+
         correct_cnt = 0
         with ThreadPoolExecutor(max_workers=200) as executor:
             futures = [executor.submit(self.eval_step, example) for example in datasets]
-            for future in futures:
-                print("做了n个")
-                prediction, gold_label = future.result()
-                print("prediction， gold", prediction, gold_label)
-                prediction = prediction.replace("-in-law", "").replace("step-", "").replace("step", "")
-                gold_label = gold_label.replace("-in-law", "").replace("step-", "").replace("step", "")
-                if prediction.lower() == gold_label.lower():
-                    correct_cnt += 1
-                    print("做对一个")
 
-        logger.info(f"{eval_type}集上的准确率为：{correct_cnt / len(datasets)}")
+            pred_answers = []
+            for future in futures:
+                if self.args.dataset == 'CLUTRR':
+                    prediction, example = future.result()
+                    prediction = prediction.replace("-in-law", "").replace("step-", "").replace("step", "")
+                    gold_label = example.gold_label.replace("-in-law", "").replace("step-", "").replace("step", "")
+                    with open(save_file, 'a', encoding="utf8") as f:
+                        save_data = {'question': example.question,
+                                     'prediction': prediction,
+                                     'gold_label': gold_label}
+                        f.write(json.dumps(save_data) + '\n')
+
+                    if prediction.lower() == gold_label.lower():
+                        correct_cnt += 1
+                    else:
+                        print("prediction， gold", prediction, gold_label)
+
+                elif self.args.dataset == 'LANG_8':
+                    prediction, example = future.result()
+                    pred_answers.append((prediction, example))
+                else:
+                    raise NotImplemented
+
+            if self.args.dataset == 'CLUTRR':
+                logger.info(f"{eval_type}集上的准确率为：{correct_cnt / len(datasets)}")
+            elif self.args.dataset == 'LANG_8':
+                score = self._lang8_metric(examples=[e for _, e in pred_answers],
+                                           preds=[p for p, _ in pred_answers])
+                logger.info(f"{eval_type}集上的P/R/F0.5分数为：{score}")
+            else:
+                raise NotImplemented
 
     def test(self,
              save_path: str,
@@ -226,9 +288,13 @@ class Trainer:
 
         assert use_epoch_file or (knowledge_memory_path and vectorizer_path)
 
+        self.args.save_dir = save_path
+
         if use_epoch_file:
             knowledge_memory_path = f"{save_path}/knowledge_base_{use_epoch_file}"
+            # knowledge_memory_path = r"D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71\knowledge_base_final"
             vectorizer_path = f"{save_path}/vectorizer_{use_epoch_file}.pkl"
+            # vectorizer_path = r"D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71\vectorizer_final.pkl"
 
         if knowledge_memory_path and vectorizer_path:
             self.knowledge_base.load_knowledge_memory(knowledge_memory_path=knowledge_memory_path,

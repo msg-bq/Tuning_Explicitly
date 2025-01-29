@@ -68,7 +68,7 @@ def _remove_duplicates(data):
 def read_func(data_dir):
     train_data, test_data = _read_CLUTRR_data(data_dir)
     keys = ['query', 'edge_types', 'target']
-    train_data = train_data[keys]
+    train_data = train_data[keys]#[train_data.apply(lambda row: len(eval(row['edge_types']))==3, axis=1)]
     dropped_train_data = train_data.drop_duplicates(subset=keys, keep='first', inplace=False)
     # 随机打散数据集，固定seed
     for i in range(10):
