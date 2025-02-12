@@ -1,0 +1,14 @@
+numpy~=1.26.0
+scikit-learn~=1.5.1
+errant~=3.0.0
+tiktoken~=0.7.0
+zhipuai~=2.1.5.20230904
+openai~=0.28.1
+requests~=2.32.3
+pandas~=2.2.2
+logger~=1.4
+Levenshtein~=0.25.1
+PyYAML~=6.0.1
+nltk~=3.9.1
+rake_nltk
+datasets~=3.1.0

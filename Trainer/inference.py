@@ -3,17 +3,14 @@ import re
 import warnings
 from concurrent.futures import ThreadPoolExecutor, as_completed  # 我先把多线程都取消了
 import random
-from typing import List, Tuple
 import json
+from typing import Callable
 
-from utils.data import DatasetLoader, Example, Rationale, KnowledgeBase, Knowledge
+from utils.data_classes import DatasetLoader, Example, Rationale, Knowledge, KnowledgeBase
+from utils.data_classes.conceptual_memory import KnowledgeMemory, MultiKnowledgeMemory
 from utils.llm import LLM
 from utils.ExtraNameSpace import ScoreNameSpace
 from utils.extract_knowledge import extract_knowledge_texts
-import utils.extract_knowledge
-import utils.clean_prediction_func
-import utils.score
-from utils.llm_models import call_openai
 
 
 @ScoreNameSpace.register("Example")
@@ -110,13 +107,19 @@ def _cold_start_inference_single(args, llm: LLM, example: Example):
     return example
 
 
-def _inference_single(llm: LLM, input_text: str, cot_trigger: str, direct_answer_trigger_for_zeroshot_cot: str,
+def _inference_single(llm: LLM, input_text: str, cot_trigger: str | Callable[[str], str],
+                      direct_answer_trigger_for_zeroshot_cot: str,
                       llm_model: str, temperature: float, top_n: int, try_times: int, cold_start_phase: bool = True) \
-                     -> List[Tuple[str, str]]:
+        -> list[tuple[str, str]]:
     """
     cold_start_phase和其他的区别是，要多一层direct_answer_trigger_for_zeroshot_cot
     """
-    llm_input = cot_trigger + "\n\n" + input_text
+    if isinstance(cot_trigger, str):
+        llm_input = cot_trigger + "\n\n" + input_text
+    elif isinstance(cot_trigger, Callable):
+        llm_input = cot_trigger(input_text)
+    else:
+        raise TypeError("cot_trigger must be a string or a callable function")
 
     rationales_answers_pair = []
     rationales = llm.generate_single_parallel(input_text=llm_input, model=llm_model,
@@ -148,46 +151,72 @@ def add_space(s):
 
 
 def _tmp_adjust(args, knowledge_base: KnowledgeBase, train_prompt: str, input_text: str, **kwargs):
-    knowledge_memory = knowledge_base.get_inference_knowledge_memory()
-    knowledge_contents = [v[0].content for v in knowledge_memory.values() if v]
+    knowledge_memory: KnowledgeMemory | MultiKnowledgeMemory = knowledge_base.get_inference_knowledge_memory()
+    knowledge_contents = list(set([v[0].content for v in knowledge_memory.values() if v]))
 
     chosen_num = min(50, len(knowledge_contents))
     chosen_knowledge = random.sample(knowledge_contents, chosen_num)
 
-    tmp_train_prompt = "Instruction: Following are several existed knowledge in knowledge base. When you answer the questions, try to use the provided knowledge whenever possible in \"we retrieve\" format. "\
-    "Try not to invent knowledge by yourself unless necessary. But if so, you are permitted to"\
-    "establish your own rules in \"we have\" format.\n"\
-    "Knowledge Base:\n"
+    tmp_train_prompt = ("Instruction: Following are several existed knowledge in knowledge base. When you answer the "
+                        "questions, try to use the provided knowledge whenever possible in \"we retrieve\" format. "
+                        "Try not to invent knowledge by yourself unless necessary. But if so, you are permitted to"
+                        "establish your own rules in \"we have\" format.\n"
+                        "Knowledge Base:\n")
 
-    prompt = tmp_train_prompt + '\n'.join(chosen_knowledge) + '\n\n' + train_prompt + '\n\n' + input_text.strip() + "\nAnswer:"
+    prompt = tmp_train_prompt + '\n'.join(
+        chosen_knowledge) + '\n\n' + train_prompt + '\n\n' + input_text.strip()
+
+    if not prompt.endswith(':'):
+        prompt += "\nAnswer:"  # XXX:最初的实验加了，但有的提示词最后一个不叫Answer，换了名字。这种会出现问题
+        # 为了不干扰旧的，先这样
 
     return prompt
+
+
+def _get_optimal_knowledge(knowledge_memory: KnowledgeMemory | MultiKnowledgeMemory, context: str,
+                           mode: str) -> Knowledge:
+    if mode == 'train':
+        this_knowledge: Knowledge = random.choice(knowledge_memory[context])  # 随机，似乎不适合greedy
+    else:  # test或eval
+        if isinstance(knowledge_memory, KnowledgeMemory):
+            this_knowledge = knowledge_memory[context][0]
+        else:  # MultiKnowledgeMemory
+            # this_knowledge = knowledge_memory.get_first_value(key=context)[0]
+            knowledges = knowledge_memory.get_first_value(key=context)
+            this_knowledge = knowledges[0] if knowledges else None  # fixme: 这里是个临时修改
+
+    return this_knowledge
 
 
 def llm_inference_category(args,
                            knowledge_base: KnowledgeBase,
                            llm: LLM,
-                           train_prompt: str,
+                           train_prompt: str | Callable[[str], str],
                            input_text: str,
                            mode: str = "train",
                            **kwargs) -> str:
-
     assert mode in ["train", "eval"], "mode must be in ['train', 'eval']"
 
-    if mode == 'train':
-        prompt = train_prompt + '\n\n' + input_text.strip() + "\nAnswer:"
+    if isinstance(train_prompt, str):
+        if mode == 'train':
+            prompt = train_prompt + '\n\n' + input_text.strip()
+            if not prompt.endswith(':'):
+                prompt += "\nAnswer:"
+        else:
+            prompt = _tmp_adjust(args, knowledge_base, train_prompt, input_text, **kwargs)
+    elif isinstance(train_prompt, Callable):
+        prompt = train_prompt(input_text)
     else:
-        prompt = _tmp_adjust(args, knowledge_base, train_prompt, input_text, **kwargs)
+        raise TypeError("train_prompt must be a string or a callable function")
 
     input_length = len(prompt.split('\n'))
-    current_line = 0  # 初始行数
 
     absent_set = set()
     knowledge_memory = knowledge_base.get_knowledge_memory() if mode == "train" \
         else knowledge_base.get_inference_knowledge_memory()
 
     try_cnt = 0
-    max_tries = 15
+    max_tries = 50  # 这里只是替换步数，非重新尝试，可以开大一点。比如一个10步的推理本身就需要10个max_tries
     while True:
         try_cnt += 1
         print("prompt:", prompt)
@@ -196,100 +225,71 @@ def llm_inference_category(args,
         response = llm.generate_single(input_text=prompt, model=args.llm_model, **kwargs)
         response = response.replace("\n\n", "\n")
         whole_text = prompt + " " + response
-        pending_lines: List[str] = whole_text.split('\n')[input_length-1:]  # 所有除去prompt的句子。每轮current_line不清零，所以不影响位置
 
-        if not pending_lines:   # 针对输出仅一行
+        prefix_response = "\n".join(whole_text.split('\n')[:input_length - 1])
+        pending_lines: list[str] = whole_text.split('\n')[input_length - 1:]  # 所有除去prompt的句子。每轮current_line不清零，所以不影响位置
+
+        if not pending_lines:  # 针对输出仅一行
             return response
 
-        if not hasattr(knowledge_base, 'vectorizer'):
-            warnings.warn(
-                "The knowledge_base has not yet execute memorization phase to build a vectorizer"
-            )
-            return response
-
-        concepts = None
+        replace_line = None
         sign = False
-        while current_line < len(pending_lines):
-            line = pending_lines[current_line]
-            current_line += 1
-
-            if args.pred_trigger.lower() in line.lower():
+        for cur_line in pending_lines:
+            if args.pred_trigger.lower() in cur_line.lower():
                 break
 
-            current_knowledge = extract_knowledge_texts(line)
+            current_knowledge = extract_knowledge_texts(cur_line)
             if not current_knowledge:
+                prefix_response += f'\n{cur_line}'
                 continue
 
-            line = line[:line.lower().index(current_knowledge[0].lower())]
+            context = cur_line[:cur_line.lower().index(current_knowledge[0].lower())]  # 第一个knowledge前面的文字被认为是场景
+            # fixme: context这个命名也可以改
 
-            concepts = knowledge_base.extract_key_concepts(doc_list=line,
-                                                           vectorizer=knowledge_base.vectorizer)  # ["(A, B)"], 例外：A, B
-
-            if not concepts or not len(concepts):
-                warnings.warn('No concepts found in line: ' + line)
-                continue
-
-            concepts = concepts[0][1]
-
-            if concepts not in knowledge_memory or not knowledge_memory[concepts]:
-                absent_set.add(concepts)
+            key_context = context
+            if key_context not in knowledge_memory or not knowledge_memory[key_context]:
+                absent_set.add(key_context)
+                prefix_response += f'\n{cur_line}'
                 continue
 
             if random.random() > args.force_check_rate:
+                prefix_response += f'\n{cur_line}'
                 continue
 
             # =============
-            this_knowledge: Knowledge = random.choice(knowledge_memory[concepts]) if mode == "train" \
-                else knowledge_memory[concepts][0]  # 随机，似乎不适合greedy
-            line = pending_lines[current_line-1]
-            current_knowledge = extract_knowledge_texts(line)
+            this_knowledge = _get_optimal_knowledge(knowledge_memory=knowledge_memory,
+                                                    context=key_context,
+                                                    mode=mode)
 
-            if not current_knowledge:
+            if this_knowledge is None:  # fixme: 不该存在，后面修改
+                prefix_response += f'\n{cur_line}'
                 continue
 
             if len(current_knowledge) > 1:
-                warnings.warn("It's better to have only one knowledge in line: " + line)
+                warnings.warn("It's better to have only one knowledge in line: " + cur_line)
             # otherwise, you should design a more specific replacement strategy
 
             current_knowledge = current_knowledge[0]
-            line = line[:line.index(current_knowledge) + len(current_knowledge)]
-            last_line = line
-            line = line.replace(current_knowledge, this_knowledge.content)
-            if line == last_line:
+            replace_line = context + current_knowledge
+            last_line = replace_line
+            replace_line = replace_line.replace(current_knowledge, this_knowledge.content)
+            if replace_line != last_line:  # 替换前后一样的话要继续看下一行。否则就可以重新去生成response了
+                print(f"进行一次有效替换：{last_line} → {replace_line}")
+            else:
+                prefix_response += f'\n{replace_line}'
                 continue
             # =============
 
-
             sign = True
-            current_line -= 1
-
             break
 
-        if current_line >= len(pending_lines) or try_cnt > max_tries:
+        if not sign or try_cnt > max_tries:  # XXX: 第二个判断位置也不好
             out = "\n".join(pending_lines)
             print("response: ", out)
             return out
 
         if sign:
-            this_knowledge: Knowledge = random.choice(knowledge_memory[concepts]) if mode == "train" \
-                else knowledge_memory[concepts][0]  # 随机，似乎不适合greedy
-            line = pending_lines[current_line]
-            current_knowledge = extract_knowledge_texts(line)
-
-            if len(current_knowledge) > 1:
-                warnings.warn("It's better to have only one knowledge in line: " + line)
-            # otherwise, you should design a more specific replacement strategy
-
-            current_knowledge = current_knowledge[0]
-            line = line[:line.index(current_knowledge)+len(current_knowledge)]
-            last_line = line
-            line = line.replace(current_knowledge, this_knowledge.content)
-            if line != last_line:
-                print(f"进行一次有效替换：{last_line} → {line}")
-
-            prompt = "\n".join(whole_text.split("\n")[:current_line+input_length-1]) + '\n' + line
-            current_line += 1
-
+            prompt = f'{prefix_response}\n{replace_line}'
             print('有替换！')
         else:
             print('无替换！')

@@ -1,14 +1,13 @@
-from typing import List
-
 from utils.ExtraNameSpace import DatasetsReaderNameSpace
 
-question_template = '''Sentence: {}\n'''\
-'''Instruction: Correct the grammar errors in the sentence and return the corrected sentence.\n'''
+# question_template = '''Sentence: {}\n'''\
+# '''Instruction: Correct the grammar errors in the sentence and return the corrected sentence.\n'''
 
-question_template = '''Sentence: {}\n'''\
-'''Question: What's the grammar errors and revised sentence of above sentence? '''
+question_template = '''Sentence: {}\n''' \
+                    '''Question: What's the grammar errors and revised sentence of above sentence? '''
 
-def _read_LANG_8_data(path) -> List[dict]:
+
+def _read_LANG_8_data(path) -> list[dict]:
     with open(path, 'r', encoding='utf-8') as f:
         lines = f.readlines()
 
@@ -33,7 +32,7 @@ def _read_LANG_8_data(path) -> List[dict]:
 
     data = [{'question': question_template.format(sample['sentence']), 'gold_label': sample['label']}
             for sample in data]
-    #去重
+    # 去重
     data_set = set()
     new_data = []
     for sample in data:
@@ -47,9 +46,9 @@ def _read_LANG_8_data(path) -> List[dict]:
 @DatasetsReaderNameSpace.register("LANG_8")
 def read_func(data_dir):
     train_data = _read_LANG_8_data(f'{data_dir}/lang-8-en-1.0/entries.train')
-    # train_data = _read_LANG_8_data(r"D:\Downloads\clang8-main\output_data\clang8_source_target_en.spacy_tokenized.tsv")
+    # train_data = _read_LANG_8_data(
+    # r"D:\Downloads\clang8-main\output_data\clang8_source_target_en.spacy_tokenized.tsv")
     # test_data = _read_LANG_8_data(r"D:\Downloads\clang8-main\output_data\clean_clang8") # 对应最后200个
     test_data = _read_LANG_8_data(f'{data_dir}/lang-8-en-1.0/entries.test')[-200:]
 
     return train_data, None, test_data
-

@@ -1,0 +1,6 @@
+CoT:
+  SALAD: !!python/name:prompt_utils.prompt_funcs.salad.prompt_input
+
+pred_trigger: "Therefore, the answer is"
+
+test_SALAD: !!python/name:prompt_utils.prompt_funcs.salad.prompt_input

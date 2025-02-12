@@ -1,5 +1,3 @@
-from typing import List
-
 import pandas as pd
 
 from utils.ExtraNameSpace import DatasetsReaderNameSpace
@@ -9,7 +7,7 @@ from utils.ExtraNameSpace import DatasetsReaderNameSpace
 
 question_template = '''Q: For the sentence "{}", is the sentiment in this sentence positive or negative?\n'''
 
-def _read_STS_B_data(path) -> List[dict]:
+def _read_STS_B_data(path) -> list[dict]:
     data = pd.read_csv(path, sep='\t', header=0)
 
     label2sentiment = {0: 'negative', 1: 'positive'}

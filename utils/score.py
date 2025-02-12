@@ -1,3 +1,5 @@
+import re
+
 from utils.ExtraNameSpace import ScoreNameSpace
 
 
@@ -7,6 +9,7 @@ def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
     用于判断是否应当保留prediction对应的rationale
     """
     return prediction.strip() == gold_label.strip()
+
 
 @ScoreNameSpace.register("CLUTRR")
 def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
@@ -32,3 +35,22 @@ def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
     gold_label = gold_label.lower().strip()
 
     return prediction.startswith(gold_label) or prediction.endswith(gold_label)
+
+
+@ScoreNameSpace.register("SALAD")
+def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
+    match = re.search(r"<ans>(.*?)<eoa>", prediction)
+    prediction = match.group(1) if match else prediction
+    prediction = prediction.replace(', ', '').replace(',', '').strip()
+
+    return prediction == gold_label
+
+
+@ScoreNameSpace.register("FOLIO_NL")
+def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
+    prediction = prediction.lower()
+    match = re.search(r"judgement:(.*?)", prediction)
+    prediction = match.group(1) if match else prediction
+    prediction = prediction.strip()
+
+    return prediction == gold_label.lower()

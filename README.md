@@ -1,1 +1,9 @@
 # Tuning_Explicitly
+
+
+
+每一个新的dataset，需要增加prompt、clean_prediction、is_high_quality_prediction
+extract_knowledge_texts、read_func (及对应的init)
+inference时候的打分也要改
+
+extract_knowledge_texts用的是CoT的名字

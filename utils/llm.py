@@ -1,12 +1,12 @@
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from functools import partial
-from typing import Optional, List
+from typing import Callable
 
 from utils.llm_models import *
 from utils.llm_models.call_glm import call_glm
 
 
-def generate_func_mapping(model: str) -> callable:
+def _generate_func_mapping(model: str) -> callable:
     openai_prefix = ["davinci", "gpt"]
     openchat_prefix = ["openchat"]
     glm_prefix = ["glm"]
@@ -25,8 +25,9 @@ def generate_func_mapping(model: str) -> callable:
 
 
 class LLM:
-    def __init__(self, generate_func: Optional[callable] = None, max_workers: int = 5):
-        self.generate_func = generate_func
+    def __init__(self, generate_func_or_name: Callable | str = None, max_workers: int = 5):
+        self.generate_func = generate_func_or_name if callable(generate_func_or_name) \
+            else _generate_func_mapping(generate_func_or_name)
         self.max_workers = max_workers
 
     def generate_single(self, input_text: str, **kwargs) -> str:
@@ -35,7 +36,7 @@ class LLM:
 
         return self.generate_func(input_text, **kwargs)
 
-    def generate_single_parallel(self, input_text: str, try_times: int = 3, **kwargs) -> List[str]:
+    def generate_single_parallel(self, input_text: str, try_times: int = 3, **kwargs) -> list[str]:
         results = []
 
         workers = min(try_times, self.max_workers)
@@ -59,7 +60,7 @@ class LLM:
 
         return results
 
-    def generate_batch(self, prompts: List[str], **kwargs) -> List[str]:
+    def generate_batch(self, prompts: list[str], **kwargs) -> list[str]:
         return [self.generate_single(prompt, **kwargs) for prompt in prompts]
 
     def eval(self):

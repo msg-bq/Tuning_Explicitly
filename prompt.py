@@ -1,13 +1,16 @@
 import os
-
 import yaml
+import prompt_utils.prompt_funcs.salad  # 为yanl
 
-prompt_dir = "./prompt"
+prompt_dir = "prompt_utils"
 
 prompt_dict = {}
 for filename in os.listdir(prompt_dir):
+    if not filename.endswith('yaml'):
+        continue
+
     filepath = os.path.join(prompt_dir, filename)
-    dct = yaml.safe_load(open(filepath, 'r', encoding='utf-8'))
+    dct = yaml.load(open(filepath, 'r', encoding='utf-8'), Loader=yaml.FullLoader)
 
     dateset_name = filename.split(".")[0]
 

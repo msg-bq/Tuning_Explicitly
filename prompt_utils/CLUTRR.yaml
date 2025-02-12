@@ -1,5 +1,5 @@
 CoT:
-  category_prompt: |-
+  CLUTRR: |-
     Context: The relations on the path from Alan to Anthony are daughter, uncle, son.
     Question: Anthony is Alan's what?
     Answer:
@@ -40,7 +40,7 @@ CoT:
     For father's mother, we have "father's mother is grandmother". So the relations are reduced to grandmother. (2 to 1)
     Therefore, the answer is grandmother.
 
-test_prompt: |-
+CLUTRR_test_prompt: |-
   Context: The relations on the path from Alan to Anthony are daughter, uncle, son.
       Question: Anthony is Alan's what?
       Answer:

@@ -1,10 +1,11 @@
 import json
 import os
-from typing import List, Union, Tuple
+from typing import List, Union
 
 from utils.ExtraNameSpace import DatasetsReaderNameSpace
-from utils.data import Example, DatasetLoader
+from utils.data_classes.knowledge_classes import Example, DatasetLoader
 from operator import itemgetter
+
 
 """
 为不同的数据集，准备不同的读入方式，输入都是一个dir，输出train, dev, test, 输出统一{'question', 'gold_label'}
@@ -14,23 +15,21 @@ from operator import itemgetter
 
 # 加一个去重
 @DatasetsReaderNameSpace.register("Example")
-def read_func() -> Tuple[list, list, list]:
+def read_func() -> tuple[list, list, list]:
     pass
 
 
-def _read_preprocessed_data(path) -> List[dict]:     # 读取预处理
+def _read_preprocessed_data(path) -> list[dict]:     # 读取预处理
     with open(path, 'r', encoding="utf8") as f:
-        data = [line.strip() for line in f.readlines()]
-
-        for i in range(len(data)):
-            data[i]: dict = eval(data[i])
+        data = [json.loads(line.strip()) for line in f.readlines()]
 
         return data
 
 
-def _save_preprocessed_data(data: List[dict], path):    # 保存预处理
-    # if not os.path.exists(path):
-    #     os.makedirs(path) todo: 这里文件夹创建奇怪
+def _save_preprocessed_data(data: list[dict], path):    # 保存预处理
+    dir_path = os.path.dirname(path)  # 获取目录路径
+    if dir_path and not os.path.exists(dir_path):
+        os.makedirs(dir_path)
 
     with open(path, 'w', encoding="utf8") as f:
         for sample in data:

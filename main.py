@@ -1,10 +1,9 @@
 import os.path
 
 from Trainer.KnowledgeTrainer import Trainer
-from utils.data import KnowledgeBase
-from utils.llm import LLM, generate_func_mapping
+from utils.data_classes.knowledge_base_classes import KnowledgeBase
+from utils.llm import LLM
 from utils.read_datasets import read_datasets, read_rationales
-import utils.read_funcs
 import argparse
 from utils.ExtraNameSpace import NameSpace
 
@@ -12,12 +11,14 @@ from prompt import prompt_dict
 
 from logger import logger
 
+import _import_overload
+
 
 def args_parse():
     parser = argparse.ArgumentParser(description="Rule-Finetune")
 
     parser.add_argument("--dataset", type=str, default="CLUTRR",
-                        choices=["default", "CLUTRR", "SST2", "LANG_8"],  # default包含一个通用的默认格式输入，暂时先不写
+                        choices=["default", "CLUTRR", "SST2", "LANG_8", "SALAD", "FOLIO_NL"],  # default包含一个通用的默认格式输入，暂时先不写
                         help="dataset used for experiment, should involve train, test at least")
 
     parser.add_argument("--train_dataset_size", type=int, default=200,
@@ -35,7 +36,7 @@ def args_parse():
     parser.add_argument("--llm_model", type=str,
                         choices=["davinci", "gpt-3.5-turbo", "gpt-3.5-turbo-ca", "gpt-3.5-turbo-0613",
                                  "gpt-3.5-turbo-1106", "gpt-4-1106-preview", "gpt-4-turbo-2024-04-09",
-                                 "gpt-4o-ca", "glm-3-turbo"],
+                                 "gpt-3.5-turbo", "glm-4-air"],
                         default="gpt-3.5-turbo-ca", help="language model used for experiment")
 
     parser.add_argument("--multi_thread", type=bool, default=True,
@@ -69,28 +70,29 @@ def args_parse():
         "--encoder", type=str, default="all-MiniLM-L6-v2", help="which sentence-transformer encoder for clustering"
     )
 
-    parser.add_argument("--cot_trigger_type", type=str, default='category_prompt',
-                        choices=['category_prompt', 'lang8'],
+    parser.add_argument("--cot_trigger_type", type=str, default='CLUTRR',
+                        choices=['CLUTRR', 'lang8', 'SALAD'],
                         help="zero-shot prompt for cold start phase")
 
     parser.add_argument("--train_prompt_type", type=str, default=None, choices=None,
-                        help="Instruction prompt for training phase with few-shot examples chosen automatically such as AutoCoT (NotImplemented), "
+                        help="Instruction prompt for training phase with few-shot examples chosen automatically "
+                             "such as AutoCoT (NotImplemented), "
                              "or use cot_trigger_prompt when None. "
                              "Should use the same format as cot_trigger_prompt.")
 
-    parser.add_argument("--test_prompt_type", type=str, default="test_prompt", choices=None,
+    parser.add_argument("--test_prompt_type", type=str, default="CLUTRR_test_prompt", choices=None,  # hack: 这里应该单独给个test
                         help="Instruction prompt for training phase or use cot_trigger_prompt when None. "
                              "It's better to use the same format as cot_trigger_prompt.")
 
     parser.add_argument("--force_check_rate", type=float, default=0.5,
-                        help="used to decide whether to replace a rule with the one in rule_map, aims to control the "\
-                        "frequency of rule usage")
+                        help="used to decide whether to replace a rule with the one in rule_map, aims to control the "
+                             "frequency of rule usage")
 
     args = parser.parse_args()
 
-    def get_prompt(prompt_dict, dataset: str, *args):
-        elem = prompt_dict
-        params = [dataset] + list(args)
+    def get_prompt(prompt_dct, dataset: str, *other_args):
+        elem = prompt_dct
+        params = [dataset] + list(other_args)
 
         sign = True
         while elem and params:
@@ -106,10 +108,11 @@ def args_parse():
             raise AttributeError
         else:
             dataset = "Default"
-            return get_prompt(prompt_dict, dataset, *args[0:1]) # 这里这个逻辑设计的非常奇怪
+            return get_prompt(prompt_dct, dataset, *other_args[0:1])  # XXX: 这里这个逻辑设计的非常奇怪
 
     args.cot_trigger = get_prompt(prompt_dict, args.dataset, 'CoT', args.cot_trigger_type)
-    args.pred_trigger = get_prompt(prompt_dict, args.dataset, 'pred_trigger') # the format used should be same as cot_trigger
+    args.pred_trigger = get_prompt(prompt_dict, args.dataset,
+                                   'pred_trigger')  # the format used should be same as cot_trigger
     args.train_prompt = get_prompt(prompt_dict, args.dataset, 'train_prompt', args.train_prompt_type) \
         if args.train_prompt_type else args.cot_trigger
     args.test_prompt = get_prompt(prompt_dict, args.dataset, args.test_prompt_type) \
@@ -120,9 +123,19 @@ def args_parse():
     if not args.data_dir:
         args.data_dir = f"./data/{args.dataset}"
 
+    def _is_incomplete_dir(dir_path: str) -> bool:
+        """
+        只有两个文件被认为不完整（其实就是args和空的train loss）
+        """
+        return len(os.listdir(dir_path)) <= 2
+    # warnings.warn("We use knowledge_base_final to judge whether a dir is complete or not.")
+    # return not os.path.exists(os.path.join(dir_path, "knowledge_base_final"))
+    # todo: 这会导致我不能并行开n个
+
     if not args.save_dir:
-        num_suffix = 0
-        while os.path.exists(f"./experiment/{args.dataset}/version_{num_suffix}"):
+        num_suffix = 145
+        while os.path.exists(f"./experiment/{args.dataset}/version_{num_suffix}") and \
+                not _is_incomplete_dir(f"./experiment/{args.dataset}/version_{num_suffix}"):
             file_list = os.listdir(f"./experiment/{args.dataset}/version_{num_suffix}")
             if file_list == ['args.txt']:
                 break
@@ -131,7 +144,7 @@ def args_parse():
         args.save_dir = f"./experiment/{args.dataset}/version_{num_suffix}"
 
     if not os.path.exists(args.save_dir):
-        os.makedirs(args.save_dir)
+        os.makedirs(args.save_dir)  # todo: 删一下没用到的version
 
     if args.multi_thread:
         if os.path.exists(os.path.join(args.data_dir, "rationale/ZeroShotCoTParallel.jsonl")):
@@ -169,16 +182,14 @@ def main():
                                                                      valid_dataset=valid_dataset,
                                                                      test_dataset=test_dataset)
 
-
     # 2. 构造Trainer
     # 2.1 构造ZeroShotCoT + # 2.2 抽取出RuleBase
-    generate_func = generate_func_mapping(args.llm_model)
-    llm_model = LLM(generate_func)
+    llm_model = LLM(generate_func_or_name=args.llm_model)
 
     cur_Trainer = Trainer(args, train_dataset, valid_dataset, test_dataset, llm_model,
                           knowledge_base=KnowledgeBase())  # topN是个小问题
 
-    if args.train:    # 需要cold start的时候运行
+    if args.train:  # 需要cold start的时候运行
         cur_Trainer.cold_start()  # 存Answer的时候就clean一下
         # 2.3 进行训练
         cur_Trainer.train()
@@ -191,10 +202,12 @@ def main():
 
     if args.test:
         # args.save_dir = r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71'
-        cur_Trainer.test(#r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_86',
-                         # r"D:\Github\Tuning_Explicitly\experiment\LANG_8\version_6",
-                         args.save_dir,
-                         use_epoch_file='final')
+        cur_Trainer.test(  # r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_86',
+            # r"D:\Github\Tuning_Explicitly\experiment\LANG_8\version_6",
+            # r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_238',
+            # r"D:\Github\Tuning_Explicitly\experiment\FOLIO_NL\version_154",  # 148是tfidf，47是hyperplane
+            args.save_dir,
+            use_epoch_file='final')
         # 25是最普通的random200，配上inference 50
         # 26是inference 50训的，
         # 28也是
@@ -208,6 +221,9 @@ def main():
         # 78 glm-3-turbo
         # 训练过程基本非常稳定，随便选一个version+重复3遍做最后的实验即可
         # 86是5000
+
+
+# rake, 0.325, tfidf 0.4，中间0.355不知道是哪个。对应了39-41
 
 
 if __name__ == '__main__':

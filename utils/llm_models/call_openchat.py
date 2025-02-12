@@ -31,11 +31,11 @@ def cnt_tokens(message):
     return cnt
 
 
-def call_openchat(input_text: Union[List[str], str], model="openchat_3.5", is_gpt3=False, **kwargs) \
-        -> Union[str, List[str]]:
+def call_openchat(input_text: Union[list[str], str], model="openchat_3.5", is_gpt3=False, **kwargs) \
+        -> str | list[str]:
     """
 
-    List[str] GPT存在历史，str 不存在历史
+    list[str] GPT存在历史，str 不存在历史
     """
     if 'topN' in kwargs:
         kwargs['n'] = kwargs.pop('topN')

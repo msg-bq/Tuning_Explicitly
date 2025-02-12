@@ -1,16 +1,15 @@
 import os
-from typing import List
 from utils.ExtraNameSpace import DatasetsReaderNameSpace
 
 import pandas as pd
 
+question_template = '''Context: The relations on the path from {query[0]} to {query[1]} are {relation_path_2}.\n''' \
+                    '''Question: {query[1]} is {query[0]}'s what?\n'''
 
-question_template = '''Context: The relations on the path from {query[0]} to {query[1]} are {relation_path_2}.\n'''\
-'''Question: {query[1]} is {query[0]}'s what?\n'''
 
 def _read_CLUTRR_data(path):
     train_task = '1.2,1.3'  # 有不同的拆分方案，不过我们只拿这个做实验
-    test_task = '1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,1.10' #1.2,1.3,
+    test_task = '1.2,1.3,1.4,1.5,1.6,1.7,1.8,1.9,1.10'  # 1.2,1.3,
 
     train_file = f'{train_task}_train.csv'
     test_files = [f'{task.strip()}_test.csv' for task in test_task.split(',')]
@@ -21,21 +20,22 @@ def _read_CLUTRR_data(path):
     return train_data, test_data
 
 
-def _build_samples(original_datasets: List[dict]):
+def _build_samples(original_datasets: list[dict]):
     """
     这里是将原始数据转换成字典格式、且只选取了必要的key
     """
     for i in range(len(original_datasets)):
-        if type(original_datasets[i]['query']) == str:
+        if isinstance(original_datasets[i]['query'], str):
             original_datasets[i]['query'] = eval(original_datasets[i]['query'])
 
-        if type(original_datasets[i]['edge_types']) == str:
+        if isinstance(original_datasets[i]['edge_types'], str):
             original_datasets[i]['edge_types'] = eval(original_datasets[i]['edge_types'])
 
     return original_datasets
 
 
-def _build_datasets_from_samples(sampling_datasets: List[dict], question_template: str = question_template) -> List[dict]:
+def _build_datasets_from_samples(sampling_datasets: list[dict], template: str = question_template) \
+        -> list[dict]:
     """
     这里是将已经转成字典格式、且只选取了必要的key的数据。我们将其转换成符合CoT格式的数据
     """
@@ -44,12 +44,13 @@ def _build_datasets_from_samples(sampling_datasets: List[dict], question_templat
         edge_type = sampling_datasets[i]['edge_types']
         relation_path_2 = ",".join(edge_type)
         sampling_datasets[i]['relation_path_2'] = relation_path_2
-        query = question_template.format(**sampling_datasets[i])
+        query = template.format(**sampling_datasets[i])
         target = sampling_datasets[i]['target']
 
         final_datasets.append({'question': query, 'gold_label': target})
 
     return final_datasets
+
 
 def _remove_duplicates(data):
     """
@@ -64,11 +65,12 @@ def _remove_duplicates(data):
             new_data.append(d)
     return new_data
 
+
 @DatasetsReaderNameSpace.register("CLUTRR")
 def read_func(data_dir):
     train_data, test_data = _read_CLUTRR_data(data_dir)
     keys = ['query', 'edge_types', 'target']
-    train_data = train_data[keys]#[train_data.apply(lambda row: len(eval(row['edge_types']))==3, axis=1)]
+    train_data = train_data[keys]  # [train_data.apply(lambda row: len(eval(row['edge_types']))==3, axis=1)]
     dropped_train_data = train_data.drop_duplicates(subset=keys, keep='first', inplace=False)
     # 随机打散数据集，固定seed
     for i in range(10):

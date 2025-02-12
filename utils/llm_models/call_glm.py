@@ -6,8 +6,7 @@ import time
 from zhipuai import ZhipuAI
 import tiktoken
 
-key_list = ["bb0cacadd0f34f6a8ef0e79fe8b6859a.waTlNiSctvzNk7tw",
-            "493b431d70f3a3cbeb422fb635d2fd9d.ESOID6BTundcrGPu"]
+key_list = ["d4a81c517ecc44c18054ec7f46209a96.SXisMYsWSL7dh1JR"]
 key_choose = 0
 
 encoding = tiktoken.get_encoding("cl100k_base")
@@ -32,15 +31,15 @@ def cnt_tokens(message):
     return cnt
 
 
-def call_glm(input_text: Union[List[str], str], model="glm-3-turbo", **kwargs) \
-        -> Union[str, List[str]]:
+def call_glm(input_text: Union[list[str], str], model="glm-3-turbo", **kwargs) \
+        -> str | list[str]:
     """
 
-    List[str] GPT存在历史，str 不存在历史
+    list[str] GPT存在历史，str 不存在历史
     """
 
     if 'topN' in kwargs:
-        kwargs['n'] = kwargs.pop('topN')
+        kwargs.pop('topN')  # XXX: zhipu好像不支持一次性返回多个结果
 
     max_supported_tokens = 6000
 
@@ -82,6 +81,7 @@ def call_glm(input_text: Union[List[str], str], model="glm-3-turbo", **kwargs) \
             #         return [c.message['content'].strip() for c in completion.choices]
 
         except Exception as e:
+            print(e)
             print("sleep")
             time.sleep(20 + 10 * random())
 

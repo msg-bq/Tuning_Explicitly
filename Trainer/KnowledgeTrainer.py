@@ -6,12 +6,11 @@ from concurrent.futures import ThreadPoolExecutor
 from typing import Callable, Union
 
 from Trainer.inference import cold_start_inference, llm_inference_category
-from utils.data import KnowledgeBase, DatasetLoader, Example, Rationale
+from utils.data_classes import KnowledgeBase, DatasetLoader, Example, Rationale
 from utils.llm import LLM
 import Levenshtein
 
 from logger import logger
-
 
 
 class Trainer:
@@ -119,7 +118,6 @@ class Trainer:
 
         return score_dataset(answer_triple)
 
-
     def backward(self, example: Example,
                  rationale: Rationale,
                  score: float):
@@ -147,9 +145,11 @@ class Trainer:
         with open(save_path, 'w', encoding="utf8"):
             pass
 
+        self.knowledge_base.train()
+
         for ep in range(self.args.epoch):  # 这里最好是epoch
             self.cur_ep = ep
-            with ThreadPoolExecutor(max_workers=40) as executor:
+            with ThreadPoolExecutor(max_workers=16) as executor:
                 futures = [executor.submit(self.train_step, example) for example in self.train_dataset]
                 futures = [future for future in futures if future.result() is not None]
 
@@ -238,16 +238,16 @@ class Trainer:
             return os.path.join(save_dir, './all_rationale{}'.format(file_cnt))
 
         save_file = _get_save_file()
-        with open(save_file, 'w', encoding="utf8") as f:
+        with open(save_file, 'w', encoding="utf8"):
             pass
 
         correct_cnt = 0
-        with ThreadPoolExecutor(max_workers=200) as executor:
+        with ThreadPoolExecutor(max_workers=200) as executor:  # hack: 超参
             futures = [executor.submit(self.eval_step, example) for example in datasets]
 
             pred_answers = []
             for future in futures:
-                if self.args.dataset == 'CLUTRR':
+                if self.args.dataset in ['CLUTRR', 'SALAD', 'FOLIO_NL']:
                     prediction, example = future.result()
                     prediction = prediction.replace("-in-law", "").replace("step-", "").replace("step", "")
                     gold_label = example.gold_label.replace("-in-law", "").replace("step-", "").replace("step", "")
@@ -266,16 +266,18 @@ class Trainer:
                     prediction, example = future.result()
                     pred_answers.append((prediction, example))
                 else:
-                    raise NotImplemented
+                    raise ValueError(f"Dataset {self.args.dataset} not implemented")
 
-            if self.args.dataset == 'CLUTRR':
+            if self.args.dataset in ['CLUTRR', 'SALAD', 'FOLIO_NL']:
                 logger.info(f"{eval_type}集上的准确率为：{correct_cnt / len(datasets)}")
             elif self.args.dataset == 'LANG_8':
                 score = self._lang8_metric(examples=[e for _, e in pred_answers],
                                            preds=[p for p, _ in pred_answers])
                 logger.info(f"{eval_type}集上的P/R/F0.5分数为：{score}")
+            elif self.args.dataset == 'SALAD':
+                raise NotImplemented  # todo: 带上一致性
             else:
-                raise NotImplemented
+                raise ValueError(f"Dataset {self.args.dataset} not implemented")
 
     def test(self,
              save_path: str,
@@ -305,19 +307,20 @@ class Trainer:
         # kb.set_knowledge_memory(knowledge_memory=km)
         # self.knowledge_base = kb
 
-        self.args.force_check_rate = 1.0
+        self.args.force_check_rate = 1
 
         # 临时保存
-        save_path2 = r"D:\Downloads\tmp.txt"
-        knowledge_memory = self.knowledge_base.get_inference_knowledge_memory()
-        dct = {}
-        for key, value in knowledge_memory.items():
-            value = value[0]
-            dct[key] = [{'rule_text': value.content,
-                         'correct': 10,
-                         'wrong': 0}]
+        # save_path2 = r"D:\Downloads\tmp.txt"
+        # knowledge_memory = self.knowledge_base.get_inference_knowledge_memory()
+        # dct = {}
+        # for key, value in knowledge_memory.items():
+        #     value = value[0]
+        #     dct[key] = [{'rule_text': value.content,
+        #                  'correct': 10,
+        #                  'wrong': 0}]
+        #
+        # with open(save_path2, 'w', encoding="utf8") as f:
+        #     f.write(str(dct))
 
-        with open(save_path2, 'w', encoding="utf8") as f:
-            f.write(str(dct))
-
+        self.knowledge_base.eval()
         self.evaluate(is_valid=False, special_datasets=special_datasets)

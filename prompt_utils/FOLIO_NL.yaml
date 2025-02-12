@@ -1,0 +1,102 @@
+CoT:
+  FOLIO_NL: |-
+    Please answer the inference question by
+    
+    
+    Premises: 1. Miroslav Venhoda was a Czech choral conductor who specialized in the performance of Renaissance and Baroque music.
+    2. Any choral conductor is a musician.
+    3. Some musicians love music.
+    4. Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant.
+    5. Miroslav Venhoda, who published a book in 1946 called Method of Studying Gregorian Chant, is a musician as he is a choral conductor.
+    Hypothesis: A Czech person wrote a book in 1946.
+    Reasoning: There're about four conditions should be satisfied, including wrote (action / predicate), Czech, book, 1946.
+    To match similar facts, we have logic knowledge that "predicate matching should check whether predicate of given two facts/premises is same". Therefore, we find that "Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant".
+    For the premise "Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant" and hypothesis,
+    we should check variable matching, we have logic knowledge that "the facts/premises with same predicate should have exactly same object". Given this, nationality as Czech, the object being a book, and the specific year 1946 — are satisfied by the given premises.
+    Judgement: True
+  
+  
+    Premises: 1. All eels are fish.
+    2. No fish are plants.
+    3. A thing is either a plant or an animal.
+    4. Nothing that breathes is paper.
+    5. All animals breathe.
+    6. If a sea eel is either an eel or a plant, then a sea eel is an eel or an animal.
+    7. No eels are plants.
+    8. All eels are animals.
+    Hypothesis: Sea eel is an eel.
+    Reasoning: There're about four conditions should be satisfied, including is (predicate), sea eel, eel.
+    To match similar facts, we have logic knowledge that "predicate matching should check whether predicate of given two facts/premises is same".
+    In this case, we should match "is", we have logic knowledge that "In logic, the "be" verb is often symbolized by "=". It acts as a predicate linking a subject to a property, stating that something "is" something else.". Therefore, it can match many premises.
+    If there're many candidate premises, we have logic knowledge that "the two facts with same variables are more likely to be matched". Thus, we find that premise 6.
+    For premise 3 (a rule) and hypothesis,
+    we should execute plain forward chaining, we have logic knowledge that "check if antecedent is consistent with given fact by comparing predicate and variables". Therefore, we conclude that sea ell is either plant or animal.
+    For premise 6 (a rule) and new hypothesis,
+    we should execute plain forward chaining, we have logic knowledge that "check if antecedent is consistent with given fact by comparing predicate and variables". Therefore, we get no more info because we don't know if sea eel is either eel or plant, just either plant or animal.
+    Judgement: Unknown
+  
+  
+    Premises:
+    1. Miroslav Venhoda was a Czech choral conductor who specialized in the performance of Renaissance and Baroque music.
+    2. Any choral conductor is a musician.
+    3. Some musicians love music.
+    4. Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant.
+    5. Miroslav Venhoda specialized in the performance of Renaissance and Baroque music.',
+    Hypothesis: No choral conductor specialized in the performance of Renaissance.
+    Reasoning: There're about two conditions should be satisfied, including specialization in Renaissance and the status as a choral conductor.
+    To match similar facts without concrete verb or predicate, we have logic knowledge that "Facts are often expressed by pattern A is B. If not, find the premises with similar variables, such as noun phrases". Therefore, we find related premises 1, 2, 4, 5.
+    For premise 4 and hypothesis,
+    we should execute plain forward chaining, we have logic knowledge that "check if antecedent is consistent with given fact by comparing predicate and variables". Therefore, we should check if "performance of Renaissance and Baroque music" satisfies "performance of Renaissance".
+    For the pattern that "whether A and B satisfy A", we have logic knowledge that "In logic, the "and" operator stating that both A and B are true. That is, A^B → A" Therefore, we conclude that there exist someone specialized in the performance of Renaissance.
+    Judgement: False
+
+pred_trigger: |- 
+  Judgement:
+
+folio_nl_test_prompt: |-
+  Premises: 1. Miroslav Venhoda was a Czech choral conductor who specialized in the performance of Renaissance and Baroque music.
+  2. Any choral conductor is a musician.
+  3. Some musicians love music.
+  4. Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant.
+  5. Miroslav Venhoda, who published a book in 1946 called Method of Studying Gregorian Chant, is a musician as he is a choral conductor.
+  Hypothesis: A Czech person wrote a book in 1946.
+  Reasoning: There're about four conditions should be satisfied, including wrote (action / predicate), Czech, book, 1946.
+  To match similar facts, we retrieve logic knowledge that "predicate matching should check whether predicate of given two facts/premises is same". Therefore, we find that "Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant".
+  For the premise "Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant" and hypothesis,
+  we should check variable matching, we retrieve logic knowledge that "the facts/premises with same predicate should have exactly same object". Given this, nationality as Czech, the object being a book, and the specific year 1946 — are satisfied by the given premises.
+  Judgement: True
+  
+  
+  Premises: 1. All eels are fish.
+  2. No fish are plants.
+  3. A thing is either a plant or an animal.
+  4. Nothing that breathes is paper.
+  5. All animals breathe.
+  6. If a sea eel is either an eel or a plant, then a sea eel is an eel or an animal.
+  7. No eels are plants.
+  8. All eels are animals.
+  Hypothesis: Sea eel is an eel.
+  Reasoning: There're about four conditions should be satisfied, including is (predicate), sea eel, eel.
+  To match similar facts, we retrieve logic knowledge that "predicate matching should check whether predicate of given two facts/premises is same".
+  In this case, we should match "is", we retrieve logic knowledge that "In logic, the "be" verb is often symbolized by "=". It acts as a predicate linking a subject to a property, stating that something "is" something else.". Therefore, it can match many premises.
+  If there're many candidate premises, we retrieve logic knowledge that "the two facts with same variables are more likely to be matched". Thus, we find that premise 6.
+  For premise 3 (a rule) and hypothesis,
+  we should execute plain forward chaining, we retrieve logic knowledge that "check if antecedent is consistent with given fact by comparing predicate and variables". Therefore, we conclude that sea ell is either plant or animal.
+  For premise 6 (a rule) and new hypothesis,
+  we should execute plain forward chaining, we retrieve logic knowledge that "check if antecedent is consistent with given fact by comparing predicate and variables". Therefore, we get no more info because we don't know if sea eel is either eel or plant, just either plant or animal.
+  Judgement: Unknown
+  
+  
+  Premises:
+  1. Miroslav Venhoda was a Czech choral conductor who specialized in the performance of Renaissance and Baroque music.
+  2. Any choral conductor is a musician.
+  3. Some musicians love music.
+  4. Miroslav Venhoda published a book in 1946 called Method of Studying Gregorian Chant.
+  5. Miroslav Venhoda specialized in the performance of Renaissance and Baroque music.',
+  Hypothesis: No choral conductor specialized in the performance of Renaissance.
+  Reasoning: There're about two conditions should be satisfied, including specialization in Renaissance and the status as a choral conductor.
+  To match similar facts without concrete verb or predicate, we retrieve logic knowledge that "Facts are often expressed by pattern A is B. If not, find the premises with similar variables, such as noun phrases". Therefore, we find related premises 1, 2, 4, 5.
+  For premise 4 and hypothesis,
+  we should execute plain forward chaining, we retrieve logic knowledge that "check if antecedent is consistent with given fact by comparing predicate and variables". Therefore, we should check if "performance of Renaissance and Baroque music" satisfies "performance of Renaissance".
+  For the pattern that "whether A and B satisfy A", we retrieve logic knowledge that "In logic, the "and" operator stating that both A and B are true. That is, A^B → A" Therefore, we conclude that there exist someone specialized in the performance of Renaissance.
+  Judgement: False
