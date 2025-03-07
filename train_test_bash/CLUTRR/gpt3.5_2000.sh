@@ -1,6 +1,6 @@
 #!/bin/bash
 
-train_dataset_size=200
+train_dataset_size=2000
 cold_start_ratio=0.1
 
 cold_start_num=$(echo "$train_dataset_size * $cold_start_ratio" | bc)
@@ -22,3 +22,4 @@ python main.py \
   --force_check_rate 0.5 \
   --build_conceptual_memory_method tfidf \
   --force_overwrite True
+

@@ -1,10 +1,13 @@
 import os
 import yaml
-import prompt_utils.prompt_funcs.salad  # 为yanl
+import prompt_utils.prompt_funcs.salad  # 为yaml
 
 prompt_dir = "prompt_utils"
 
 prompt_dict = {}
+
+import sys
+print(sys.path)
 for filename in os.listdir(prompt_dir):
     if not filename.endswith('yaml'):
         continue

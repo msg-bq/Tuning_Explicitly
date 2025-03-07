@@ -74,7 +74,8 @@ def args_parse():
                         choices=['CLUTRR', 'lang8', 'SALAD'],
                         help="zero-shot prompt for cold start phase")
 
-    parser.add_argument("--train_prompt_type", type=str, default=None, choices=None,
+    parser.add_argument("--train_prompt_type", type=str, default=None, choices=None,  # fixme: 现在的
+                        # train实则使用了cot_trigger，名字容易引起误解
                         help="Instruction prompt for training phase with few-shot examples chosen automatically "
                              "such as AutoCoT (NotImplemented), "
                              "or use cot_trigger_prompt when None. "
@@ -141,7 +142,7 @@ def args_parse():
     # todo: 这会导致我不能并行开n个
 
     if not args.save_dir:
-        num_suffix = 145
+        num_suffix = 1
         while os.path.exists(f"./experiment/{args.dataset}/version_{num_suffix}") and \
                 not _is_incomplete_dir(f"./experiment/{args.dataset}/version_{num_suffix}"):
             file_list = os.listdir(f"./experiment/{args.dataset}/version_{num_suffix}")
