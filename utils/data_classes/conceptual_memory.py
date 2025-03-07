@@ -146,7 +146,7 @@ def _rank_func_similarity(key: str | Category, knowledge: Knowledge) -> float:
         key_embedding = encode_model.encode(key, convert_to_tensor=True)
         CACHE_RANK[key] = key_embedding
 
-    knowledge_texts = tuple(knowledge.get_source_context())
+    knowledge_texts = tuple(knowledge.get_source_context())  # 对吧，应该就是一回事儿
     if knowledge_texts in CACHE_RANK:
         knowledge_embeddings = CACHE_RANK[knowledge_texts]
     else:
@@ -158,7 +158,9 @@ def _rank_func_similarity(key: str | Category, knowledge: Knowledge) -> float:
     if similarity_scores > 0.9:
         print("相似度", key, knowledge_texts)
         print(util.cos_sim(key_embedding, knowledge_embeddings))
-        similarity_score = similarity_scores  # 2*
+        similarity_score = similarity_scores # 2*  hack: 这里也应该可以作为个超参或者重载
+        # 这里就是，有的时候similarity更关键，有的时候confidence更关键。而且要考虑到confidence处于0-1的相对低的区域
+        # （比如现在还有为了平滑的坟墓+10）
     elif similarity_scores > 0.6:
         similarity_score = similarity_scores
     else:
@@ -400,17 +402,21 @@ class MultiKnowledgeMemory:
         :param knowledge: 待排序的knowledge
         """
         confidence_score = knowledge.get_confidence()
+        return confidence_score
 
         similarity_score = _rank_func_similarity(key, knowledge)
 
         score = confidence_score + similarity_score
-        knowledge.rank_score[key] = score
-        print("分数", confidence_score, similarity_score)
+        if hasattr(knowledge, 'rank_score'):
+            knowledge.rank_score[key] = score
+        else:
+            knowledge.rank_score = {key: score}
 
         return score
 
     def filter_and_sort(self, key: str, knowledge: list[Knowledge]):
         knowledge = [k for k in knowledge if _rank_func_similarity(key, k) >= 0.7]  # XXX: 1.5是个超参
+        # 这里设计有问题，这应当是一个独立的、专做文本检索或排序的，只不过此时的排序要求它综合考虑confidence和similarity或着说relevance
         return sorted(knowledge,
                       key=lambda x: self.rank_func_knowledge(key, x),
                       reverse=True)

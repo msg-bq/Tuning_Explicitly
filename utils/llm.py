@@ -4,21 +4,33 @@ from typing import Callable
 
 from utils.llm_models import *
 from utils.llm_models.call_glm import call_glm
+from utils.llm_models.call_vllm import call_vllm
 
 
 def _generate_func_mapping(model: str) -> callable:
+    model = model.lower()
+
     openai_prefix = ["davinci", "gpt"]
     openchat_prefix = ["openchat"]
     glm_prefix = ["glm"]
+    deepseek_prefix = ["deepseek"]
+    gemini_predix = ["gemini"]
+    claude_prefix = ["claude"]
+    llama_prefix = ["llama"]
 
     prefix_func_mapping = {'gpt': (openai_prefix, call_openai),
+                           'deepseek': (deepseek_prefix, call_openai),
                            'openchat': (openchat_prefix, call_openchat),
-                           'glm': (glm_prefix, call_glm)
+                           'glm': (glm_prefix, call_glm),
+                           'gemini': (gemini_predix, call_openai),
+                           'claude': (claude_prefix, call_openai),
+                           'llama': (llama_prefix, call_vllm)
                            }
 
     for _, (prefixes, func) in prefix_func_mapping.items():
         for prefix in prefixes:
-            if model.startswith(prefix):
+            # if model.startswith(prefix):
+            if prefix in model:
                 return func
 
     raise ValueError(f"model {model} is not supported.")

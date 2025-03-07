@@ -67,7 +67,7 @@ def cold_start_inference(args, llm: LLM, dataset: DatasetLoader):
             return True
 
         with open(fail_file, 'a') as fs:
-            fs.write(json.dumps({'question': example_tmp.question.strip()}) + '\n')
+            fs.write(json.dumps(example_tmp.__dict__) + '\n')
 
         return False
 
@@ -163,8 +163,10 @@ def _tmp_adjust(args, knowledge_base: KnowledgeBase, train_prompt: str, input_te
                         "establish your own rules in \"we have\" format.\n"
                         "Knowledge Base:\n")
 
-    prompt = tmp_train_prompt + '\n'.join(
-        chosen_knowledge) + '\n\n' + train_prompt + '\n\n' + input_text.strip()
+    prompt = (tmp_train_prompt + '\n'.join(
+        chosen_knowledge) + '\n\n' + train_prompt + ('\n\nPlease answer next question by following given knowledge and '
+                                                     'the format and process shown in above examples strictly.\n')
+              + input_text.strip())
 
     if not prompt.endswith(':'):
         prompt += "\nAnswer:"  # XXX:最初的实验加了，但有的提示词最后一个不叫Answer，换了名字。这种会出现问题
@@ -199,7 +201,8 @@ def llm_inference_category(args,
 
     if isinstance(train_prompt, str):
         if mode == 'train':
-            prompt = train_prompt + '\n\n' + input_text.strip()
+            prompt = train_prompt + ('\n\nPlease answer next question by following given knowledge and '
+                                     'the format and process shown in above examples strictly.\n') + input_text.strip()
             if not prompt.endswith(':'):
                 prompt += "\nAnswer:"
         else:
@@ -216,7 +219,7 @@ def llm_inference_category(args,
         else knowledge_base.get_inference_knowledge_memory()
 
     try_cnt = 0
-    max_tries = 50  # 这里只是替换步数，非重新尝试，可以开大一点。比如一个10步的推理本身就需要10个max_tries
+    max_tries = 15  # 这里只是替换步数，非重新尝试，可以开大一点。比如一个10步的推理本身就需要10个max_tries
     while True:
         try_cnt += 1
         print("prompt:", prompt)

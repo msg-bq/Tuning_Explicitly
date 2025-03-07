@@ -1,0 +1,10 @@
+{"question": "Context: The relations on the path from Gabrielle to Micheal are grandson,brother.\nQuestion: Micheal is Gabrielle's what?", "prediction": "grandson", "gold_label": "grandson"}
+{"question": "Context: The relations on the path from Lisa to Donna are husband,daughter.\nQuestion: Donna is Lisa's what?", "prediction": "daughter)", "gold_label": "daughter"}
+{"question": "Context: The relations on the path from Jason to Lewis are grandson,brother.\nQuestion: Lewis is Jason's what?", "prediction": "uncle", "gold_label": "grandson"}
+{"question": "Context: The relations on the path from Alma to Annette are husband,daughter.\nQuestion: Annette is Alma's what?", "prediction": "daughter", "gold_label": "daughter"}
+{"question": "Context: The relations on the path from Gabrielle to Alma are husband,daughter.\nQuestion: Alma is Gabrielle's what?", "prediction": "Gabrielle", "gold_label": "daughter"}
+{"question": "Context: The relations on the path from Gabrielle to Kevin are grandson,brother.\nQuestion: Kevin is Gabrielle's what?", "prediction": "grandson", "gold_label": "grandson"}
+{"question": "Context: The relations on the path from Jason to Chad are grandson,brother.\nQuestion: Chad is Jason's what?", "prediction": "grandfather", "gold_label": "grandson"}
+{"question": "Context: The relations on the path from Gabrielle to Lisa are husband,daughter.\nQuestion: Lisa is Gabrielle's what?", "prediction": "granddaughter", "gold_label": "daughter"}
+{"question": "Context: The relations on the path from James to Molly are wife,son,grandmother.\nQuestion: Molly is James's what?", "prediction": "grandmother", "gold_label": "mother"}
+{"question": "Context: The relations on the path from Marian to Stanley are son,father,father.\nQuestion: Stanley is Marian's what?", "prediction": "grandson", "gold_label": "father"}

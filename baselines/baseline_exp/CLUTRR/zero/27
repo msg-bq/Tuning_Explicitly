@@ -1,0 +1,3 @@
+{"question": "Context: The relations on the path from Gabrielle to Micheal are grandson,brother.\nQuestion: Micheal is Gabrielle's what?", "prediction": "grandson", "gold_label": "grandson"}
+{"question": "Context: The relations on the path from Lisa to Donna are husband,daughter.\nQuestion: Donna is Lisa's what?", "prediction": "Step-daughter", "gold_label": "daughter"}
+{"question": "Context: The relations on the path from Jason to Lewis are grandson,brother.\nQuestion: Lewis is Jason's what?", "prediction": "Grandson", "gold_label": "grandson"}

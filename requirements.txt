@@ -12,3 +12,5 @@ PyYAML~=6.0.1
 nltk~=3.9.1
 rake_nltk
 datasets~=3.1.0
+biopython~=1.85
+sentence_transformers~=2.2.2

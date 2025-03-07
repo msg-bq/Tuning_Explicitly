@@ -54,3 +54,14 @@ def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
     prediction = prediction.strip()
 
     return prediction == gold_label.lower()
+
+
+@ScoreNameSpace.register("FOLIO_NL")
+def is_high_quality_prediction(prediction: str, gold_label: str) -> bool:
+    prediction = prediction.lower()
+    match = re.search(r"Therefore, the answer is (.*?)", prediction)
+    if match:
+        prediction = match.group(1) if match else prediction
+        prediction = prediction.strip()
+
+    return prediction == gold_label.lower()

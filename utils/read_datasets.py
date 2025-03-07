@@ -75,7 +75,7 @@ def read_datasets(args) -> (DatasetLoader, DatasetLoader, DatasetLoader):
     test_path = os.path.join(data_dir, 'preprocessed_data/test_preprocessed.jsonl')
     valid_path = os.path.join(data_dir, 'preprocessed_data/valid_preprocessed.jsonl')
 
-    if not os.path.exists(train_path) or not os.path.exists(test_path):
+    if args.force_overwrite or not os.path.exists(train_path) or not os.path.exists(test_path):
         train_dataset, valid_dataset, test_dataset = read_func(data_dir)
         if args.train_dataset_size and args.train_dataset_size > 0:
             train_dataset = train_dataset[:args.train_dataset_size]
@@ -106,7 +106,7 @@ def read_rationales(args, **kwargs):
     """
     rationale_path = args.rationale_path
 
-    if os.path.exists(rationale_path):
+    if not args.force_overwrite and os.path.exists(rationale_path):
         rationale_dataset = _read_preprocessed_data(rationale_path)
         """
         修改对应的值，伪代码是

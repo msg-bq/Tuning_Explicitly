@@ -13,13 +13,14 @@ _KNOWLEDGE_MEMORY_TYPE = KnowledgeMemory | MultiKnowledgeMemory
 
 
 class KnowledgeBase:
-    def __init__(self):
+    def __init__(self, mode: str = None, build_conceptual_memory_method: str = 'tfidf'):
         self._content_to_instance: dict[str, Knowledge] = dict()
         self._knowledge_memory: _KNOWLEDGE_MEMORY_TYPE | None = None
         # fixme: For grandson\'s brother, we have "  这个例子对应的context和knowledge都是错的，检查一下是multi这个class的问题还是
         # 确实没有
         self._inference_knowledge_memory: _KNOWLEDGE_MEMORY_TYPE | None = None
         self.mode: Literal['train', 'eval', None] = None
+        self.build_conceptual_memory_method: str = build_conceptual_memory_method  # 用哪个算法构建conceptual memory
 
     def __len__(self):
         return len(self._content_to_instance)
@@ -205,6 +206,8 @@ class KnowledgeBase:
             chosen_categories = []
             top_contexts = self.__get_topk_context(knowledge_sources=knowledge.get_source_context(),
                                                    top_percent=1)  # hack: 0.5超参
+            # 这里确实意味着相关文本，或者相关文本的数量也作为一个参数？这个是不能替代similarity，或者是similarity的加权和的权？
+            # 我目前感觉好像是一回事儿
 
             for source in knowledge.sources:
                 context: str = source.related_context
@@ -271,7 +274,7 @@ class KnowledgeBase:
         #                                               'have', 'answer'])
         # 对于tf-idf，从源头删除就够了，因为inference时，train不存在的会被丢弃
 
-        self._build_conceptual_memory(doc_list=doc_list)
+        self._build_conceptual_memory(doc_list=doc_list, fn_name=self.build_conceptual_memory_method)
 
         self._update_knowledge_memories(learned_info=learned_info)
 
@@ -303,10 +306,13 @@ class KnowledgeBase:
         """
         推理时过滤掉质量过低的knowledge
         """
+        threshold_num = 1
+
         if isinstance(knowledge_memory, KnowledgeMemory):
             filtered_knowledge_memory = KnowledgeMemory(knowledge_memory.cat_func)
             for k in knowledge_memory:
-                filtered_knowledge = [v for v in knowledge_memory[k] if v.get_success_num(k) > v.get_failure_num(k) / 2]
+                filtered_knowledge = [v for v in knowledge_memory[k] if v.get_success_num(k) > v.get_failure_num(k)
+                                      / threshold_num]
                 if filtered_knowledge:
                     filtered_knowledge_memory[k] = filtered_knowledge
             return filtered_knowledge_memory
@@ -315,7 +321,8 @@ class KnowledgeBase:
             filtered_multi_knowledge_memory = MultiKnowledgeMemory(knowledge_memory.cat_funcs)
             for i, table in enumerate(knowledge_memory.tables):
                 for k in table:
-                    filtered_knowledge = [v for v in table[k] if v.get_success_num(k) > v.get_failure_num(k) / 2]
+                    filtered_knowledge = [v for v in table[k] if v.get_success_num(k) > v.get_failure_num(k)
+                                          / threshold_num]
                     if filtered_knowledge:
                         filtered_multi_knowledge_memory.tables[i][k] = filtered_knowledge
             return filtered_multi_knowledge_memory

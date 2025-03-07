@@ -49,3 +49,13 @@ def extract_knowledge_texts(rationale: str) -> Union[set[str], list[str]]:
 
     return knowledge_texts
 
+
+@KnowledgeExtractionNameSpace.register("SignalP")
+def extract_knowledge_texts(rationale: str) -> Union[set[str], list[str]]:
+    knowledge_pattern = re.compile(r"(we|We)\s+(have|retrieve|guess)(\s+the)?(\s+biological)?\s+knowledge(\s+that)?"
+                                   r"\s+\"(.+?)\"[.,;:?! ]")
+    knowledge_texts = knowledge_pattern.findall(rationale)
+    knowledge_texts = [k[-1].strip() for k in knowledge_texts]
+
+    return knowledge_texts
+

@@ -20,7 +20,7 @@ def clean_prediction(self, prediction: str) -> str:
 
     pred_words = prediction.split()
     if len(pred_words) == 1:
-        if pred_words[0][-1] in string.punctuation:
+        if pred_words[0][-1] in string.punctuation + '*':
             return pred_words[0][:-1]
 
         return pred_words[0].strip()
@@ -167,7 +167,7 @@ def clean_prediction(self, prediction: str) -> str:
     match = re.search(r"<ans>(.*?)<eoa>", prediction)
     prediction = match.group(1) if match else prediction
 
-    return prediction.replace(', ', '').replace(',','').strip()
+    return prediction.replace(', ', '').replace(',', '').strip()
 
 
 @PredictionCleanNameSpace.register("FOLIO_NL")
@@ -190,5 +190,24 @@ def clean_prediction(self, prediction: str) -> str:
 
     if 'unknown' in prediction.lower():
         return 'Unknown'
+
+    return prediction.strip()
+
+
+@PredictionCleanNameSpace.register("SignalP")
+def clean_prediction(self, prediction: str) -> str:
+    prediction = prediction.lower().strip()
+
+    if 'no_sp' in prediction:
+        return 'NO_SP'
+
+    if ' sp ' in prediction or 'sp.' in prediction or prediction.endswith(' sp'):
+        return 'SP'
+
+    while prediction[-1] in string.punctuation + '*$':
+        prediction = prediction[:-1]
+
+    while prediction[0] in string.punctuation + '*$':
+        prediction = prediction[1:]
 
     return prediction.strip()

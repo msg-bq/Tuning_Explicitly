@@ -1,0 +1,89 @@
+CoT:
+  SignalP: |-
+    Question: Can you identify if there is any signal peptides in the following sequence:
+    MGTLSLSSSLKPSLVSSRLNSSSSASSSSFPKPNNLYLKPTKLISPPLRTTSPSPLRFANASIEMSQTQE
+    Answer: 
+    First, consider the structure of signal peptides. we have biological knowledge that "signal peptides are typically short sequences (15-30 amino acids) located at the N-terminal of a protein, and it needs at least one positively charged amino acid and a hydrophobic region to pass through the cell membrane."
+    Analyzing the positively charged region, this N-terminal sequence has M (Methionine), G (Glycine), T (Threonine), L (Leucine) and S (Serine). Then we analyze the positivity of them.
+    For the positivity of Methionine, we have biological knowledge that "Methionine (M) is a neutral amino acid" and does not contribute to the positively charged region.
+    For the positivity of Glycine, we have biological knowledge that "Glycine (G) is a neutral amino acid" and does not contribute to the positively charged region.
+    For the positivity of Threonine, we have biological knowledge that "Threonine (T) is a neutral amino acid" and does not contribute to the positively charged region.
+    For the positivity of Leucine, we have biological knowledge that "Leucine (L) is a neutral amino acid" and does not contribute to the positively charged region.
+    For the positivity of Serine, we have biological knowledge that "Serine (S) is a neutral amino acid" and does not contribute to the positively charged region.
+    Analyzing hydrophobic core, we have biological knowledge that "hydrophobic core contain a stretch of hydrophobic amino acids".
+    Examining the sequence, we observe that it contains multiple occurrences of S (Serine).
+    For the hydrophobicity of Serine, we have biological knowledge that "Serine (S) is a polar and hydrophilic amino acid", could not contribute to the hydrophobic core.
+
+    Meanwhile, we will guess and utilize some knowledge to analyze further. ** List some possible conditions about signal peptides first and then guess knowledge to judge them. **
+    For example, signal peptides need cleavage site to depart from amino acid sequence, we guess the biological knowledge that "signal peptides recognize specific motifs, often containing small, neutral amino acids like [...]", therefore, ...
+    One more example, signal peptides generally have high hydrophobicity, the numerical threshold of it can also be a related knowledge or criteria, frequently the c-regions of some types of signal peptides contain [which type of] amino acids, isoelectric point, the length limit of n-region or h-region or c-region,certain amount of some amino acids, extracellular protein sequence might be secreted via a non-classical secretion pathway rather than a standard signal peptide, or something else. 
+    ** You can guess the complete conditions and then use knowledge to analyse them. **
+    
+    This sequence is unlikely to contain a signal peptide, based on the following observations:
+    Weak n-region: Lacks a strong cluster of positively charged residues.
+    Lack of a hydrophobic core: No clear hydrophobic stretch.
+    No obvious cleavage site: The pattern does not match typical signal peptide cleavage motifs.
+    
+    Therefore, the answer is NO_SP.
+    
+    # ==================== #
+    
+    Question: Can you identify if there is any signal peptides in the following sequence:
+    [the amino acid sequence]
+    Answer: 
+    First, [the content 1]
+  
+    Meanwhile, [the content 2]
+    
+    This sequence is [the content 4]
+    
+    Therefore, the answer is SP.
+    
+    # ==================== #
+    
+    Please follow the format of above example strictly to answer following question. Please analyse sequence by considering structure, positively charged region, hydrophobic core and some more characteristics (the numerical threshold of hydrophobicity, frequently the c-regions of some types of signal peptides contain [which type of] amino acids, isoelectric point, the length limit of n-region or h-region or c-region,certain amount of some amino acids, extracellular protein sequence might be secreted via a non-classical secretion pathway rather than a standard signal peptide, or something else) of signal peptides like above two examples.
+    The knowledge you used or guess should write in 'we have/guess biological knowledge that ""' format.
+
+SignalP_test_prompt: |-
+  Question: Can you identify if there is any signal peptides in the following sequence:
+  MGTLSLSSSLKPSLVSSRLNSSSSASSSSFPKPNNLYLKPTKLISPPLRTTSPSPLRFANASIEMSQTQE
+  Answer: 
+  First, consider the structure of signal peptides. we retrieve biological knowledge that "signal peptides are typically short sequences (15-30 amino acids) located at the N-terminal of a protein, and it needs at least one positively charged amino acid and a hydrophobic region to pass through the cell membrane."
+  Analyzing the positively charged region, this N-terminal sequence has M (Methionine), G (Glycine), T (Threonine), L (Leucine) and S (Serine). Then we analyze the positivity of them.
+  For the positivity of Methionine, we retrieve biological knowledge that "Methionine (M) is a neutral amino acid" and does not contribute to the positively charged region.
+  For the positivity of Glycine, we retrieve biological knowledge that "Glycine (G) is a neutral amino acid" and does not contribute to the positively charged region.
+  For the positivity of Threonine, we retrieve biological knowledge that "Threonine (T) is a neutral amino acid" and does not contribute to the positively charged region.
+  For the positivity of Leucine, we retrieve biological knowledge that "Leucine (L) is a neutral amino acid" and does not contribute to the positively charged region.
+  For the positivity of Serine, we retrieve biological knowledge that "Serine (S) is a neutral amino acid" and does not contribute to the positively charged region.
+  Analyzing hydrophobic core, we retrieve biological knowledge that "hydrophobic core contain a stretch of hydrophobic amino acids".
+  Examining the sequence, we observe that it contains multiple occurrences of S (Serine).
+  For the hydrophobicity of Serine, we retrieve biological knowledge that "Serine (S) is a polar and hydrophilic amino acid", could not contribute to the hydrophobic core.
+
+  Meanwhile, utilize more types of knowledge to analyze further. List some possible conditions about signal peptides first and then retrieve knowledge from knowledge base to judge them.
+  For example, signal peptides need cleavage site to depart from amino acid sequence, we retrieve the biological knowledge that "signal peptides recognize specific motifs, often containing [which type of] amino acids like [... ]", therefore, ...
+  One more example, signal peptides generally have high hydrophobicity, the numerical threshold of it can also be a related knowledge or criteria, frequently the c-regions of some types of signal peptides contain [which type of] amino acids, isoelectric point, the length limit of n-region or h-region or c-region,certain amount of some amino acids, extracellular protein sequence might be secreted via a non-classical secretion pathway rather than a standard signal peptide, or something else.
+
+  This sequence is unlikely to contain a signal peptide, based on the following observations:
+  Weak n-region: Lacks a strong cluster of positively charged residues.
+  Lack of a hydrophobic core: No clear hydrophobic stretch.
+  No obvious cleavage site: The pattern does not match typical signal peptide cleavage motifs.
+
+  Therefore, the answer is NO_SP.
+  
+  # ==================== #
+  
+  Question: Can you identify if there is any signal peptides in the following sequence:
+  [the amino acid sequence example]
+  Answer: 
+  First, [the content 1]
+  
+  Meanwhile, [the content 2]
+  
+  This sequence is [the content 4]
+  
+  Therefore, the answer is SP.
+  
+  # ==================== #
+
+  Please follow the format of above example strictly to answer following question. Please analyse sequence by considering structure, positively charged region, hydrophobic core and some more characteristics (the numerical threshold of hydrophobicity, frequently the c-regions of some types of signal peptides contain [which type of] amino acids, isoelectric point, the length limit of n-region or h-region or c-region,certain amount of some amino acids, extracellular protein sequence might be secreted via a non-classical secretion pathway rather than a standard signal peptide, or something else) of signal peptides like above two examples.
+  The knowledge you used should write in 'we retrieve biological knowledge that ""' format.

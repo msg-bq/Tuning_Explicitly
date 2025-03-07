@@ -6,8 +6,10 @@ import time
 import openai
 import tiktoken
 
-openai.api_base = "https://api.chatanywhere.tech"
-key_list = ["sk-R0EfwnmLCIAMbEbAUw0YofH6DwTXmBTtrkrJgfrWqiUAt4Dq"]#["sk-CsxV63g13dws7G6xsQvaCTGUgeP4mVaomReDwolJVLttXpmA"]
+openai.api_base = "https://api.chatanywhere.org"
+key_list = [
+    "sk-cjXWw9p27gYezQ5feyDNKYhCcZhTnsUZdaKZZSyfGAMzAhdG"
+]
 key_choose = 0
 
 encoding = tiktoken.get_encoding("cl100k_base")
@@ -40,6 +42,9 @@ def call_openai(input_text: Union[list[str], str], model="gpt-3.5-turbo-ca", is_
     """
     if 'topN' in kwargs:
         kwargs['n'] = kwargs.pop('topN')
+
+    if 'temperature' not in kwargs:
+        kwargs['top_p'] = 0.01
 
     max_supported_tokens = 6000 if model.startswith("gpt-4") else 12000 # ≈3:4
 

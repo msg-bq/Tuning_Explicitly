@@ -149,7 +149,7 @@ class Trainer:
 
         for ep in range(self.args.epoch):  # 这里最好是epoch
             self.cur_ep = ep
-            with ThreadPoolExecutor(max_workers=16) as executor:
+            with ThreadPoolExecutor(max_workers=8) as executor:
                 futures = [executor.submit(self.train_step, example) for example in self.train_dataset]
                 futures = [future for future in futures if future.result() is not None]
 
@@ -207,7 +207,7 @@ class Trainer:
         # 3. 读入train_dataset的rationale
         pass
 
-    def eval_step(self, example: Example):
+    def eval_step(self, example: Example) -> tuple[str, str, Example]:
         response = llm_inference_category(args=self.args,
                                           knowledge_base=self.knowledge_base,
                                           llm=self.llm,
@@ -218,7 +218,7 @@ class Trainer:
         rationale = example.parse_response(response, self.args)
         prediction = Rationale.clean_prediction(rationale['prediction'])
 
-        return prediction, example
+        return prediction, rationale['rationale'], example
 
     def evaluate(self, is_valid=False, special_datasets: DatasetLoader = None):
         """
@@ -242,18 +242,19 @@ class Trainer:
             pass
 
         correct_cnt = 0
-        with ThreadPoolExecutor(max_workers=200) as executor:  # hack: 超参
+        with ThreadPoolExecutor(max_workers=20) as executor:  # hack: 超参
             futures = [executor.submit(self.eval_step, example) for example in datasets]
 
             pred_answers = []
             for future in futures:
-                if self.args.dataset in ['CLUTRR', 'SALAD', 'FOLIO_NL']:
-                    prediction, example = future.result()
+                if self.args.dataset in ['CLUTRR', 'SALAD', 'FOLIO_NL', 'SignalP']:
+                    prediction, rationale, example = future.result()
                     prediction = prediction.replace("-in-law", "").replace("step-", "").replace("step", "")
                     gold_label = example.gold_label.replace("-in-law", "").replace("step-", "").replace("step", "")
                     with open(save_file, 'a', encoding="utf8") as f:
                         save_data = {'question': example.question,
                                      'prediction': prediction,
+                                     'rationale': rationale,
                                      'gold_label': gold_label}
                         f.write(json.dumps(save_data) + '\n')
 
@@ -268,16 +269,20 @@ class Trainer:
                 else:
                     raise ValueError(f"Dataset {self.args.dataset} not implemented")
 
-            if self.args.dataset in ['CLUTRR', 'SALAD', 'FOLIO_NL']:
-                logger.info(f"{eval_type}集上的准确率为：{correct_cnt / len(datasets)}")
+            if self.args.dataset in ['CLUTRR', 'SALAD', 'FOLIO_NL', 'SignalP']:
+                performance_info = f"{eval_type}集上的准确率为：{correct_cnt / len(datasets)}"
             elif self.args.dataset == 'LANG_8':
                 score = self._lang8_metric(examples=[e for _, e in pred_answers],
                                            preds=[p for p, _ in pred_answers])
-                logger.info(f"{eval_type}集上的P/R/F0.5分数为：{score}")
+                performance_info = f"{eval_type}集上的P/R/F0.5分数为：{score}"
             elif self.args.dataset == 'SALAD':
                 raise NotImplemented  # todo: 带上一致性
             else:
                 raise ValueError(f"Dataset {self.args.dataset} not implemented")
+
+            logger.info(performance_info)
+            with open(save_file, 'a', encoding="utf8") as f:
+                f.write(performance_info + '\n')
 
     def test(self,
              save_path: str,

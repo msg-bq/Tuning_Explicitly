@@ -19,7 +19,7 @@ def _read_STS_B_data(path) -> list[dict]:
     return data
 
 
-@DatasetsReaderNameSpace.register("STS_B")
+@DatasetsReaderNameSpace.register("SST2")
 def read_func(data_dir):
     train_data = _read_STS_B_data(f'{data_dir}/train.tsv')
     dev_data = _read_STS_B_data(f'{data_dir}/dev.tsv')[:200]

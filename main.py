@@ -18,7 +18,7 @@ def args_parse():
     parser = argparse.ArgumentParser(description="Rule-Finetune")
 
     parser.add_argument("--dataset", type=str, default="CLUTRR",
-                        choices=["default", "CLUTRR", "SST2", "LANG_8", "SALAD", "FOLIO_NL"],  # default包含一个通用的默认格式输入，暂时先不写
+                        choices=["default", "CLUTRR", "SST2", "LANG_8", "SALAD", "FOLIO_NL", "SignalP"],  # default包含一个通用的默认格式输入，暂时先不写
                         help="dataset used for experiment, should involve train, test at least")
 
     parser.add_argument("--train_dataset_size", type=int, default=200,
@@ -42,16 +42,16 @@ def args_parse():
     parser.add_argument("--multi_thread", type=bool, default=True,
                         help="whether to use multi-thread to accelerate")
 
-    parser.add_argument("--epoch", type=int, default=5,
+    parser.add_argument("--epoch", type=int, default=5,  # 同样由于4的价格，SignalP用了3
                         help="epoch used for experiment")
 
-    parser.add_argument("--cold_start_topN", type=int, default=5,
+    parser.add_argument("--cold_start_topN", type=int, default=3,  # 类似的，SignalP用了5
                         help="output topN results for every call LLM.generate in cold start phase")
 
-    parser.add_argument("--cold_start_temperature", type=float, default=0.5,
+    parser.add_argument("--cold_start_temperature", type=float, default=0.3,
                         help="temperature used in cold start phase")
 
-    parser.add_argument("--cold_start_try_num", type=int, default=1,
+    parser.add_argument("--cold_start_try_num", type=int, default=2,
                         help="the number of tries in cold start phase")
 
     parser.add_argument("--train", type=bool, default=True,
@@ -84,9 +84,17 @@ def args_parse():
                         help="Instruction prompt for training phase or use cot_trigger_prompt when None. "
                              "It's better to use the same format as cot_trigger_prompt.")
 
-    parser.add_argument("--force_check_rate", type=float, default=0.5,
+    parser.add_argument("--force_check_rate", type=float, default=0.5,  # SignalP用了0.2，因为gpt4贵
                         help="used to decide whether to replace a rule with the one in rule_map, aims to control the "
                              "frequency of rule usage")
+
+    parser.add_argument("--build_conceptual_memory_method", type=str, default="tfidf",
+                        help="the method to build conceptual memory, please register your own algorithms in "
+                             "build_categorize_model.py and build_categorize_func.py")
+
+    parser.add_argument("--force_overwrite", type=bool, default=False,
+                        help="whether to overwrite the existing preprocessed dataset"
+                             "and ZeroShotCoT rationale")
 
     args = parser.parse_args()
 
@@ -137,10 +145,12 @@ def args_parse():
         while os.path.exists(f"./experiment/{args.dataset}/version_{num_suffix}") and \
                 not _is_incomplete_dir(f"./experiment/{args.dataset}/version_{num_suffix}"):
             file_list = os.listdir(f"./experiment/{args.dataset}/version_{num_suffix}")
-            if file_list == ['args.txt']:
+            if len(file_list) <= 2:
                 break
 
             num_suffix += 1
+        if not args.train and args.test:
+            num_suffix -= 1
         args.save_dir = f"./experiment/{args.dataset}/version_{num_suffix}"
 
     if not os.path.exists(args.save_dir):
@@ -187,7 +197,8 @@ def main():
     llm_model = LLM(generate_func_or_name=args.llm_model)
 
     cur_Trainer = Trainer(args, train_dataset, valid_dataset, test_dataset, llm_model,
-                          knowledge_base=KnowledgeBase())  # topN是个小问题
+                          knowledge_base=KnowledgeBase
+                          (build_conceptual_memory_method=args.build_conceptual_memory_method))  # topN是个小问题
 
     if args.train:  # 需要cold start的时候运行
         cur_Trainer.cold_start()  # 存Answer的时候就clean一下
@@ -204,7 +215,7 @@ def main():
         # args.save_dir = r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71'
         cur_Trainer.test(  # r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_86',
             # r"D:\Github\Tuning_Explicitly\experiment\LANG_8\version_6",
-            # r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_238',
+            # r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_273',
             # r"D:\Github\Tuning_Explicitly\experiment\FOLIO_NL\version_154",  # 148是tfidf，47是hyperplane
             args.save_dir,
             use_epoch_file='final')
@@ -224,6 +235,10 @@ def main():
 
 
 # rake, 0.325, tfidf 0.4，中间0.355不知道是哪个。对应了39-41
+
+# CLUTRR, tfidf, top=1.0, only confidence
+# CLUTRR, hyperplane, top=0.5, confidence+similarity
+# 其他数据集好像都是拿confidence+similarity顺手做的，没有关心细节参数，top当时可能是0.5。
 
 
 if __name__ == '__main__':

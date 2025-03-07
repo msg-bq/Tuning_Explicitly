@@ -48,10 +48,12 @@ def _build_categorize_model_rake_nltk(doc_list):
     nltk.download('punkt_tab')
     nltk.download('stopwords')
 
-    empty_stopwords = {"$^@^#&@&#*@"}
-    folio_nl_stopwords = {'premise', 'hypothesis', 'hypo', 'premises', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
-                          'that', 'we', 'have', 'retrieve', 'should', 'the', 'for'}
-    r = Rake(stopwords=folio_nl_stopwords)  # Rake的停用词不能设置为空（空的时候默认使用nltk的，所以需要给一个特殊值）
+    # empty_stopwords = {"$^@^#&@&#*@"}
+    # folio_nl_stopwords = {'premise', 'hypothesis', 'hypo', 'premises', '1', '2', '3', '4', '5', '6', '7', '8', '9', '0',
+    #                       'that', 'we', 'have', 'retrieve', 'should', 'the', 'for'}
+    signalp_stopwords = {'retrieve', 'we', 'have', 'answer', 'for', 'biological', 'logical', 'guess',
+                         'the'}
+    r = Rake()  # Rake的停用词不能设置为空（空的时候默认使用nltk的，所以需要给一个特殊值）
 
     return r
 
