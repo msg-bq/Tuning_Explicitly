@@ -149,7 +149,7 @@ class Trainer:
 
         for ep in range(self.args.epoch):  # 这里最好是epoch
             self.cur_ep = ep
-            with ThreadPoolExecutor(max_workers=8) as executor:
+            with ThreadPoolExecutor(max_workers=16) as executor:
                 futures = [executor.submit(self.train_step, example) for example in self.train_dataset]
                 futures = [future for future in futures if future.result() is not None]
 
