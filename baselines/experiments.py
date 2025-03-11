@@ -6,11 +6,21 @@ from typing import Callable
 
 import yaml
 
+# 获取当前文件的路径
+from pathlib import Path
+import sys
+current_file_path = Path(__file__).resolve()
+# 获取上上级目录的路径
+parent_directory = current_file_path.parent.parent
+# 将上上级目录添加到模块搜索路径中
+sys.path.append(str(parent_directory))
+
 from utils import LLM, NameSpace
 from utils.data_classes import Rationale
 from utils.read_datasets import read_datasets
 
 import utils.clean_prediction_func
+import utils.read_funcs
 
 
 def args_parse():
@@ -22,10 +32,10 @@ def args_parse():
                         help="dataset used for experiment, should involve train, test at least")
 
     parser.add_argument("--llm_model", type=str,
-                        choices=["davinci", "gpt-3.5-turbo", "gpt-3.5-turbo-ca", "gpt-3.5-turbo-0613",
-                                 "gpt-3.5-turbo-1106", "gpt-4-1106-preview", "gpt-4-turbo-2024-04-09",
-                                 "gpt-4o-ca", "glm-4-air", "claude-3-5-haiku-20241022",
-                                 "gemini-1.5-flash-latest"],
+                        # choices=["davinci", "gpt-3.5-turbo", "gpt-3.5-turbo-ca", "gpt-3.5-turbo-0613",
+                        #          "gpt-3.5-turbo-1106", "gpt-4-1106-preview", "gpt-4-turbo-2024-04-09",
+                        #          "gpt-4o-ca", "glm-4-air", "claude-3-5-haiku-20241022",
+                        #          "gemini-1.5-flash-latest"],
                         default="gpt-3.5-turbo-ca", help="language model used for experiment")
 
     parser.add_argument("--data_dir", type=str, default=None,
@@ -39,7 +49,7 @@ def args_parse():
     args = parser.parse_args()
 
     if not args.data_dir:
-        args.data_dir = f"../data/{args.dataset}"
+        args.data_dir = f"data/{args.dataset}"
 
     if not args.save_file:
         num_suffix = 0
@@ -77,7 +87,7 @@ def _get_prompt(args):
         from baseline_prompt.SALAD_baseline import salad_prompt_input
         return salad_prompt_input  # hack: 超参
 
-    file_path = os.path.join('../prompt_utils/', f'{args.dataset}.yaml')
+    file_path = os.path.join('prompt_utils/', f'{args.dataset}.yaml')
     return yaml.load(open(file_path, 'r', encoding='utf-8'), Loader=yaml.FullLoader)[args.prompt_type]
 
 

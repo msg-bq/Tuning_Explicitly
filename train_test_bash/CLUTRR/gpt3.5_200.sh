@@ -20,5 +20,4 @@ python main.py \
   --cot_trigger_type CLUTRR \
   --test_prompt_type CLUTRR_test_prompt \
   --force_check_rate 0.5 \
-  --build_conceptual_memory_method tfidf \
-  --force_overwrite True
+  --build_conceptual_memory_method tfidf

@@ -69,7 +69,7 @@ def __hash_vector(inp, encoder, plane: np.ndarray):
         inp = __stop_words_filter(inp,
                                   stop_words=['sentence', 'phrase', 'retrieve', 'we',
                                               'have', 'answer', 'for', 'biological', 'logical', 'guess'])
-
+        # 这边也可以按数据集or按提示词类型索引，作为超参
     plane_hash = hashlib.sha256(plane.tobytes()).hexdigest()  # XXX: 这里虽然有哈希碰撞的可能性，但后果和概率都不高（plane也就
     # 不超两位数。所以暂时不管它，想校验也很容易，生成plane时候查一下即可
     if inp not in _ENCODE_CACHE[plane_hash]:

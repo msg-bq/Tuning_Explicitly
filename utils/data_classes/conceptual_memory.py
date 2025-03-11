@@ -158,7 +158,7 @@ def _rank_func_similarity(key: str | Category, knowledge: Knowledge) -> float:
     if similarity_scores > 0.9:
         print("相似度", key, knowledge_texts)
         print(util.cos_sim(key_embedding, knowledge_embeddings))
-        similarity_score = similarity_scores # 2*  hack: 这里也应该可以作为个超参或者重载
+        similarity_score = similarity_scores  # 2*  hack: 这里也应该可以作为个超参或者重载
         # 这里就是，有的时候similarity更关键，有的时候confidence更关键。而且要考虑到confidence处于0-1的相对低的区域
         # （比如现在还有为了平滑的坟墓+10）
     elif similarity_scores > 0.6:

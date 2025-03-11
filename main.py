@@ -35,9 +35,9 @@ def args_parse():
 
     parser.add_argument("--llm_model", type=str,
                         choices=["davinci", "gpt-3.5-turbo", "gpt-3.5-turbo-ca", "gpt-3.5-turbo-0613",
-                                 "gpt-3.5-turbo-1106", "gpt-4-1106-preview", "gpt-4-turbo-2024-04-09",
+                                 "gpt-3.5-turbo-0125", "gpt-4-1106-preview", "gpt-4-turbo-2024-04-09",
                                  "gpt-3.5-turbo", "glm-4-air"],
-                        default="gpt-3.5-turbo-ca", help="language model used for experiment")
+                        default="gpt-3.5-turbo-0125", help="language model used for experiment")
 
     parser.add_argument("--multi_thread", type=bool, default=True,
                         help="whether to use multi-thread to accelerate")
@@ -54,13 +54,13 @@ def args_parse():
     parser.add_argument("--cold_start_try_num", type=int, default=2,
                         help="the number of tries in cold start phase")
 
-    parser.add_argument("--train", type=bool, default=True,
+    parser.add_argument("--train", type=bool, default=False,
                         help="whether to train")
 
     parser.add_argument("--eval", type=bool, default=False,
                         help="whether to eval")
 
-    parser.add_argument("--test", type=bool, default=True,
+    parser.add_argument("--test", type=bool, default=False,
                         help="whether to test")
 
     parser.add_argument("--cold_start_num", type=int, default=20,
@@ -187,7 +187,7 @@ def main():
 
     # 1. 读取数据集
     train_dataset, valid_dataset, test_dataset = read_datasets(args)
-    if args.rationale_path:
+    if not args.force_overwrite and args.rationale_path:
         train_dataset, valid_dataset, test_dataset = read_rationales(args,
                                                                      train_dataset=train_dataset,
                                                                      valid_dataset=valid_dataset,
@@ -216,9 +216,9 @@ def main():
         # args.save_dir = r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71'
         cur_Trainer.test(  # r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_86',
             # r"D:\Github\Tuning_Explicitly\experiment\LANG_8\version_6",
-            # r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_273',
+            r'D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_21',
             # r"D:\Github\Tuning_Explicitly\experiment\FOLIO_NL\version_154",  # 148是tfidf，47是hyperplane
-            args.save_dir,
+            # args.save_dir,
             use_epoch_file='final')
         # 25是最普通的random200，配上inference 50
         # 26是inference 50训的，

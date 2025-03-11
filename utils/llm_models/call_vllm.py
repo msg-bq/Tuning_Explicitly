@@ -43,11 +43,17 @@ def call_vllm(input_text: Union[list[str], str], model="gpt-3.5-turbo-ca", is_gp
 
     if 'topN' in kwargs:
         kwargs['n'] = kwargs.pop('topN')
+    if 'temperature' not in kwargs:
+        kwargs['top_p'] = 0.01
+        # kwargs['temperature'] = 0.0
 
     max_supported_tokens = 6000 if model.startswith("gpt-4") else 12000 # ≈3:4
 
     if isinstance(input_text, str):
-        prompt = [{"role": "user", "content": " ".join(input_text.split(' ')[:max_supported_tokens])}]
+        prompt = [{
+            "system": "You are a useful assistant.",
+            "role": "user",
+            "content": " ".join(input_text.split(' ')[:max_supported_tokens])}]
     else:
         prompt = input_text
 
@@ -65,33 +71,22 @@ def call_vllm(input_text: Union[list[str], str], model="gpt-3.5-turbo-ca", is_gp
         try_call -= 1
         start_time = time.time()
         try:
-            if is_gpt3:
-                result = openai.Completion.create(
-                    model=model,
-                    prompt=prompt,
-                    **kwargs)
-                # print("time:", time.time() - start_time)
-                if len(result.choices) == 1:
-                    return result.choices[0].text.strip()
-                else:
-                    return [c.text.strip() for c in result.choices]
-
-            else:
-                completion = openai.ChatCompletion.create(
+            completion = openai.ChatCompletion.create(
                     model=model,
                     messages=prompt,
+                    # top_p=0.01,
+                    # temperature=0.0,
                     **kwargs
                 )
-                # print("time:", time.time() - start_time)
+            # print("time:", time.time() - start_time)
 
-                if len(completion.choices) == 1:
-                    return completion.choices[0].message['content'].strip()
-                else:
-                    return [c.message['content'].strip() for c in completion.choices]
+            if len(completion.choices) == 1:
+                return completion.choices[0].message['content'].strip()
+            else:
+                return [c.message['content'].strip() for c in completion.choices]
 
         except Exception as e:
             print("报错信息：", e, input_text)
-            time.sleep(20 + 10 * random())
             key_choose = (key_choose + 1) % len(key_list)
 
     if 'n' in kwargs and kwargs['n'] > 1:

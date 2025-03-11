@@ -22,4 +22,3 @@ python main.py \
   --force_check_rate 0.5 \
   --build_conceptual_memory_method tfidf \
   --force_overwrite True
-

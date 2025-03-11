@@ -40,9 +40,8 @@ class Trainer:
         dataset = cold_start_inference(self.args, self.llm, self.train_dataset)
 
         for data in dataset:
-            knowledge_texts = []
             for r in data.rationales:
-                knowledge_texts += r.get_knowledge_texts()  # 这儿也没有根据prediction和label的一致性选择正确的rule
+                knowledge_texts = r.get_knowledge_texts()  # 这儿也没有根据prediction和label的一致性选择正确的rule
                 self.knowledge_base.update_knowledge(knowledge_texts=knowledge_texts,
                                                      question=data.question,
                                                      rationale=r,
@@ -75,8 +74,6 @@ class Trainer:
             example.update_rationale(rationale_instance)
 
             score = self.score(new_rationale['prediction'], example.gold_label)
-            if score < 0.5:
-                print(1)
 
             return rationale_instance, score
 
@@ -157,7 +154,7 @@ class Trainer:
                 rationales = [future.result()['rationale'] for future in futures
                               if future.result()['rationale'] is not None]
 
-                losses = [(loss+1)/2 for loss in losses]
+                losses = [(loss + 1) / 2 for loss in losses]
                 # None对应样例、-1对应输出没有rationale的样例
                 logger.info(f"epoch{ep}的平均score为：{sum(losses) / len(losses)}")  # 如果像正常的微调
 
@@ -197,8 +194,8 @@ class Trainer:
             # 如果还想考虑一个特殊情况的话，就是checkpoint。但是这个我觉得也没必要，因为checkpoint的load阶段就应该读入了
             knowledge_memory_path = f"{self.args.save_dir}/knowledge_base_{_version}"
             vectorizer_path = f"{self.args.save_dir}/vectorizer_{_version}.pkl"
-            self.knowledge_base.load_knowledge_memory(knowledge_memory_path=knowledge_memory_path,
-                                                      vectorizer_path=vectorizer_path)
+            self.knowledge_base.load_knowledge_memory(knowledge_base_path=knowledge_memory_path,
+                                                      knowledge_memory_path=vectorizer_path)
 
             kb = KnowledgeBase()
             kb.set_knowledge_memory(self.knowledge_base.get_inference_knowledge_memory())
@@ -242,7 +239,7 @@ class Trainer:
             pass
 
         correct_cnt = 0
-        with ThreadPoolExecutor(max_workers=20) as executor:  # hack: 超参
+        with ThreadPoolExecutor(max_workers=200) as executor:  # hack: 超参
             futures = [executor.submit(self.eval_step, example) for example in datasets]
 
             pred_answers = []
@@ -287,32 +284,34 @@ class Trainer:
     def test(self,
              save_path: str,
              use_epoch_file: Union[int, str] = None,
+             knowledge_base_path: str = None,
              knowledge_memory_path: str = None,
-             vectorizer_path: str = None,
              special_datasets: DatasetLoader = None
              ):
         """提示词也可以酌情调整，做个hook"""
 
-        assert use_epoch_file or (knowledge_memory_path and vectorizer_path)
+        assert use_epoch_file or (knowledge_base_path and knowledge_memory_path)
 
         self.args.save_dir = save_path
 
         if use_epoch_file:
-            knowledge_memory_path = f"{save_path}/knowledge_base_{use_epoch_file}"
+            knowledge_base_path = f"{save_path}/knowledge_base_{use_epoch_file}"
             # knowledge_memory_path = r"D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71\knowledge_base_final"
-            vectorizer_path = f"{save_path}/vectorizer_{use_epoch_file}.pkl"
+            knowledge_memory_path = f"{save_path}/vectorizer_{use_epoch_file}.pkl"
             # vectorizer_path = r"D:\Github\Tuning_Explicitly\experiment\CLUTRR\version_71\vectorizer_final.pkl"
 
-        if knowledge_memory_path and vectorizer_path:
-            self.knowledge_base.load_knowledge_memory(knowledge_memory_path=knowledge_memory_path,
-                                                      vectorizer_path=vectorizer_path)
+        if knowledge_base_path and knowledge_memory_path:
+            self.knowledge_base = KnowledgeBase.load_knowledge_memory(knowledge_base_path=knowledge_base_path,
+                                                                      knowledge_memory_path=knowledge_memory_path,
+                                                                      build_conceptual_memory_method=
+                                                                      self.args.build_conceptual_memory_method)
 
         # km = self.knowledge_base.get_inference_knowledge_memory()
         # kb = deepcopy(self.knowledge_base)
         # kb.set_knowledge_memory(knowledge_memory=km)
         # self.knowledge_base = kb
 
-        self.args.force_check_rate = 1
+        self.args.force_check_rate = 1.0
 
         # 临时保存
         # save_path2 = r"D:\Downloads\tmp.txt"

@@ -44,7 +44,7 @@ class KnowledgeBase:
         raise TypeError("knowledge in '_split_knowledge_text' func should be str")
 
     def _find_knowledge_instance(self, knowledge: str | list[str | Knowledge]) -> set[Knowledge]:
-        knowledge = self._split_knowledge_text(knowledge) if isinstance(knowledge, str) else knowledge
+        knowledge: list[str | Knowledge] = self._split_knowledge_text(knowledge) if isinstance(knowledge, str) else knowledge
         knowledge = [k.content if isinstance(k, Knowledge) else k for k in knowledge]  # 不假设"Knowledge类型=在KB里"
 
         knowledge_instances = set([self._content_to_instance[k] if k in self._content_to_instance
@@ -118,18 +118,24 @@ class KnowledgeBase:
         if vectorizer_path:
             self._knowledge_memory.save(path=vectorizer_path)  # fixme: 先用vectorizer的路径
 
-    def load_knowledge_memory(self, knowledge_memory_path: str, vectorizer_path: str = None):
-        self._load_knowledge(knowledge_memory_path)
+    @staticmethod
+    def load_knowledge_memory(knowledge_base_path: str,
+                              knowledge_memory_path: str = None,
+                              build_conceptual_memory_method: str = 'tfidf'):  # 这个参数没存下来不太好
+        obj = KnowledgeBase()
+        obj._load_knowledge(knowledge_base_path)
 
-        if vectorizer_path:
+        if knowledge_memory_path:
             # _type = MultiKnowledgeMemory if os.path.basename(vectorizer_path).startswith('multi') \
             #     else KnowledgeMemory
-            _type = KnowledgeMemory  # hack: 这里先固定下
-            self._knowledge_memory = _type.load(path=vectorizer_path)  # hack: 这里面选type目前没有任何影响，两个
+            _type = KnowledgeMemory  # hack: 这里先固定下 超参
+            obj._knowledge_memory = _type.load(path=knowledge_memory_path)  # hack: 这里面选type目前没有任何影响，两个
             # class的load函数一样，得到的结果自然也是一样的
 
-            learned_info = self._get_memory_learned_info()
-            self._update_knowledge_memories(learned_info=learned_info)
+            # learned_info = self._get_memory_learned_info()
+            # self._update_knowledge_memories(learned_info=learned_info)  # fixme: 这里导致了报错
+
+        return obj
 
     def _update_knowledge_memory(self,
                                  concepts_chain: list[Category] | list[tuple[Category, ...]],
@@ -208,6 +214,7 @@ class KnowledgeBase:
                                                    top_percent=1)  # hack: 0.5超参
             # 这里确实意味着相关文本，或者相关文本的数量也作为一个参数？这个是不能替代similarity，或者是similarity的加权和的权？
             # 我目前感觉好像是一回事儿
+            # 但严格来说，这里得是直接更新related source，要求那个只存top50%，或者get_source的时候只允许get50%，才算一致
 
             for source in knowledge.sources:
                 context: str = source.related_context

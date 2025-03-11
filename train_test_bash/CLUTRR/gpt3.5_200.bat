@@ -2,7 +2,7 @@
 pushd %CD%
 
 set train_dataset_size=200
-set cold_start_ratio=0.1
+set cold_start_ratio=0.2
 
 echo wscript.echo %train_dataset_size% * %cold_start_ratio% > temp.vbs
 for /f "delims=" %%a in ('cscript //nologo temp.vbs') do set cold_start_num=%%a
@@ -12,7 +12,7 @@ python main.py ^
   --dataset CLUTRR ^
   --train_dataset_size %train_dataset_size% ^
   --llm_model gpt-3.5-turbo-ca ^
-  --epoch 5 ^
+  --epoch 8 ^
   --cold_start_topN 3 ^
   --cold_start_temperature 0.3 ^
   --cold_start_try_num 2 ^

@@ -78,7 +78,7 @@ class KnowledgeSource:
             # 最好是从related_context的输入端就进行控制，即knowledge本身抽取时记录对应的context，再处理
             # 但暂时校验是充分的，这一点没有特别的必要
 
-        raise ValueError(f"{knowledge} not in rationale")
+        raise ValueError(f"{knowledge} not in rationale \"{self.rationale.rationale}\"")
 
     @staticmethod
     def __stop_words_filter(text: str, stop_words: list[str]):  # fixme: 回头看放在哪里
@@ -135,8 +135,28 @@ class Knowledge:
             raise TypeError
 
     def get_source_context(self) -> list[str]:
-        sources = self.sources
-        return [s.related_context for s in sources]
+        source_contexts = [s.related_context for s in self.sources]
+        def _get_topk_context(knowledge_sources: list[str], top_percent: float = 0.5) -> list[str]:
+            """
+            :param knowledge_sources:
+            :param top_percent: 选取数量占比前百分之top_percent的source
+            :return: 选取的topk context
+            """
+            source_count = dict()
+            for source in knowledge_sources:
+                source_count[source] = source_count.get(source, 0) + 1
+
+            source_count = sorted(source_count.items(), key=lambda x: x[1], reverse=True)
+            chosen_sources = []
+            threshold = len(knowledge_sources) * top_percent
+            for source, count in source_count:
+                chosen_sources.append(source)
+                threshold -= count
+                if threshold <= 0:
+                    break
+
+            return chosen_sources
+        return _get_topk_context(source_contexts, top_percent=0.5)
 
     def update_source(self, question: str = None, rationale: 'Rationale' = None, score: float = None,
                       sources: Union[KnowledgeSource, list[KnowledgeSource]] = None):
@@ -165,14 +185,14 @@ class Knowledge:
                 raise TypeError
 
     def get_confidence(self) -> float:
-        return self.get_success_num() / (len(self.sources) + 10)
+        return self.get_success_num() / (len(self.sources) + 3)
 
     @staticmethod
     def _is_success(source: KnowledgeSource):
         """
         先采取默认策略，＞0.8的认为回答正确
         """
-        return source.score > 0.8
+        return source.score > 0.8  # hack: 超参
 
     @staticmethod
     def _is_same_categories(x_categories: Category | list[Category] | tuple[Category],
